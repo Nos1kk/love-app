@@ -100,3 +100,17 @@
 }
 
 .gift-receive-anim { animation: giftBounce 0.6s ease; }
+/* ===== FIX: Telegram WebApp animations ===== */
+.page.active .animate-in {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+}
+
+.page.active .delay-1,
+.page.active .delay-2,
+.page.active .delay-3,
+.page.active .delay-4,
+.page.active .delay-5,
+.page.active .delay-6 {
+    opacity: 1 !important;
+}
