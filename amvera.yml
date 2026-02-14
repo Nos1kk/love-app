@@ -4,16 +4,6 @@ meta:
     name: npm
     version: 20
 
-build:
-  npm:
-    install:
-      - install
-
-artifacts:
-  - from: /
-    to: /
-
 run:
   command: node server.js
-  persistenceMount: /data
   containerPort: 3000
