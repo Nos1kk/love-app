@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>💕 Для тебя, любимая</title>
+    
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300;400;500;600;700&family=Pacifico&family=Caveat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/calendar.css">
+    <link rel="stylesheet" href="css/menu.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" href="css/profile-new.css">
+    <link rel="stylesheet" href="css/features.css">
+    <link rel="stylesheet" href="css/icons.css">
+</head>
+<body>
+
+    <!-- ===== FLOATING EFFECTS ===== -->
+    <div class="floating-hearts" id="floatingHearts"></div>
+    <div class="sparkle-container" id="sparkleContainer"></div>
+
+    <!-- ===== TOAST ===== -->
+    <div class="toast" id="toast">
+        <span class="toast-icon">💕</span>
+        <span id="toastText">Уведомление</span>
+    </div>
+
+    <!-- ===== SIDE MENU OVERLAY ===== -->
+    <div class="side-menu-overlay" id="menuOverlay" onclick="toggleMenu()"></div>
+
+    <!-- ===== SIDE MENU ===== -->
+    <div class="side-menu" id="sideMenu">
+        <div class="menu-header">
+            <div class="menu-avatar" id="menuAvatar">👸</div>
+            <div class="menu-user-name" id="menuUserName">Любимая 💕</div>
+            <div class="menu-user-status" id="menuUserStatus">В сети • Самая красивая</div>
+            <div class="menu-role-badge" id="menuRoleBadge">Принцесса</div>
+        </div>
+        <div class="menu-section">
+            <div class="menu-section-title">Главное</div>
+            <div class="menu-item active" data-page="home" onclick="navigateTo('home')">
+                <div class="menu-item-icon pink">🏠</div>
+                <span class="menu-item-text">Главная</span>
+            </div>
+            <div class="menu-item" data-page="calendar" onclick="navigateTo('calendar')">
+                <div class="menu-item-icon lilac">📅</div>
+                <span class="menu-item-text">Календарь</span>
+                <span class="menu-item-badge" id="calendarBadge">2</span>
+            </div>
+            <div class="menu-item" data-page="letters" onclick="navigateTo('letters')">
+                <div class="menu-item-icon peach">💌</div>
+                <span class="menu-item-text">Любовные письма</span>
+                <span class="menu-item-badge" id="lettersBadge">0</span>
+            </div>
+            <div class="menu-item" data-page="profile" onclick="navigateTo('profile')">
+                <div class="menu-item-icon gold">👤</div>
+                <span class="menu-item-text">Профиль</span>
+            </div>
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-section">
+            <div class="menu-section-title">Праздники</div>
+            <div class="menu-item" onclick="navigateTo('calendar'); toggleMenu();">
+                <div class="menu-item-icon coral">💝</div>
+                <span class="menu-item-text">14 Февраля</span>
+            </div>
+            <div class="menu-item" onclick="navigateTo('calendar'); toggleMenu();">
+                <div class="menu-item-icon gold">🌷</div>
+                <span class="menu-item-text">8 Марта</span>
+            </div>
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-section">
+            <div class="menu-section-title">Ещё</div>
+            <div class="menu-item" data-page="gallery" onclick="navigateTo('gallery')">
+                <div class="menu-item-icon pink">📸</div>
+                <span class="menu-item-text">Фотоальбомы</span>
+            </div>
+            <div class="menu-item" data-page="gifts" onclick="navigateTo('gifts')">
+                <div class="menu-item-icon lilac">🎁</div>
+                <span class="menu-item-text">Подарки</span>
+            </div>
+            <div class="menu-item" id="adminMenuBtn" style="display:none;" data-page="admin" onclick="navigateTo('admin')">
+                <div class="menu-item-icon mint">⚙️</div>
+                <span class="menu-item-text">Админ-панель</span>
+            </div>
+        </div>
+        <div class="menu-footer">
+            <p>Сделано с 💕</p>
+            <div class="role-switcher" onclick="switchRole()">
+                <span id="roleSwitchLabel">🔑 Войти как Админ</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== MODAL ===== -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modalContent">
+            <button class="modal-close" onclick="closeModal()">✕</button>
+            <span class="modal-emoji" id="modalEmoji">💝</span>
+            <h2 id="modalTitle">Заголовок</h2>
+            <p id="modalText">Текст</p>
+            <button class="modal-btn" onclick="closeModal()">Понятно! 💕</button>
+        </div>
+    </div>
+
+    <!-- ===== MAIN CONTAINER ===== -->
+    <div class="app-container" id="appContainer">
+
+        <!-- ===== PAGE: HOME ===== -->
+        <div class="page active" id="page-home">
+            <header class="header">
+                <div class="header-top">
+                    <div class="user-info" onclick="toggleMenu()">
+                        <div class="avatar">
+                            <div class="avatar-ring"></div>
+                            <span id="headerAvatar">👸</span>
+                        </div>
+                        <div>
+                            <div class="user-name" id="headerUserName">Привет, Любимая!</div>
+                            <div class="user-greeting">Сегодня будет отличный день 🌸</div>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <div class="header-btn" onclick="openNotifications()">
+                            🔔
+                            <div class="notification-badge" id="notifBadge">0</div>
+                        </div>
+                        <div class="header-btn" onclick="toggleMenu()">☰</div>
+                    </div>
+                </div>
+                <div class="header-title">
+                    <h1>Мой мир — это ты 💕</h1>
+                    <div class="header-subtitle">Каждый день с тобой — праздник</div>
+                </div>
+            </header>
+
+            <!-- Countdown -->
+            <div class="countdown-banner animate-in delay-1">
+                <div class="countdown-label" id="countdownLabel">
+                    <span class="event-icon">💝</span> До 14 Февраля осталось <span class="event-icon">💝</span>
+                </div>
+                <div class="countdown-grid">
+                    <div class="countdown-item">
+                        <div class="countdown-number" id="days">00</div>
+                        <div class="countdown-unit">дней</div>
+                    </div>
+                    <div class="countdown-item">
+                        <div class="countdown-number" id="hours">00</div>
+                        <div class="countdown-unit">часов</div>
+                    </div>
+                    <div class="countdown-item">
+                        <div class="countdown-number" id="minutes">00</div>
+                        <div class="countdown-unit">минут</div>
+                    </div>
+                    <div class="countdown-item">
+                        <div class="countdown-number" id="seconds">00</div>
+                        <div class="countdown-unit">секунд</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Theme Pills -->
+            <div class="section-title animate-in delay-2">
+                <h2>🎀 Праздники</h2>
+            </div>
+            <div class="theme-pills animate-in delay-2">
+                <div class="theme-pill active" onclick="switchHoliday('valentine', this)">💝 14 Февраля</div>
+                <div class="theme-pill" onclick="switchHoliday('march8', this)">🌷 8 Марта</div>
+                <div class="theme-pill" onclick="switchHoliday('birthday', this)">🎂 День рождения</div>
+                <div class="theme-pill" onclick="switchHoliday('anniversary', this)">💍 Годовщина</div>
+            </div>
+
+            <!-- Mini Calendar Preview -->
+            <div class="section-title animate-in delay-2">
+                <h2>📅 Ближайшие даты</h2>
+                <span class="see-all" onclick="navigateTo('calendar')">Календарь →</span>
+            </div>
+            <div class="upcoming-events animate-in delay-2" id="upcomingEvents">
+                <!-- Generated by JS -->
+            </div>
+
+            <!-- Daily Compliment -->
+            <div class="section-title animate-in delay-3">
+                <h2>✨ Комплимент дня</h2>
+                <span class="see-all" onclick="newCompliment()">Обновить</span>
+            </div>
+            <div class="daily-compliment animate-in delay-3" onclick="newCompliment()">
+                <div class="compliment-label">💫 Комплимент дня</div>
+                <div class="compliment-text" id="complimentText">Ты освещаешь мой мир ярче, чем тысяча звёзд ⭐</div>
+                <div class="compliment-refresh">🔄 Нажми для нового</div>
+            </div>
+
+            <!-- Love Cards -->
+            <div class="section-title animate-in delay-3">
+                <h2>💕 Для тебя</h2>
+            </div>
+            <div class="cards-slider animate-in delay-3">
+                <div class="love-card" onclick="navigateTo('letters')">
+                    <span class="card-emoji">💌</span>
+                    <div class="card-title">Письма любви</div>
+                    <div class="card-desc">Читай и отвечай на письма</div>
+                    <div class="card-action">Открыть →</div>
+                </div>
+                <div class="love-card" onclick="navigateTo('gifts')">
+                    <span class="card-emoji">🎁</span>
+                    <div class="card-title">Подарки</div>
+                    <div class="card-desc">Смотри свои подарочки!</div>
+                    <div class="card-action">Открыть →</div>
+                </div>
+                <div class="love-card" onclick="navigateTo('gallery')">
+                    <span class="card-emoji">📸</span>
+                    <div class="card-title">Наши фото</div>
+                    <div class="card-desc">Фотоальбомы воспоминаний</div>
+                    <div class="card-action">Смотреть →</div>
+                </div>
+                <div class="love-card" onclick="openModal('💋','Купоны любви','Купон на: обнимашки, завтрак, массаж! 🎟️')">
+                    <span class="card-emoji">💋</span>
+                    <div class="card-title">Купоны любви</div>
+                    <div class="card-desc">Специальные купоны</div>
+                    <div class="card-action">Получить →</div>
+                </div>
+            </div>
+
+            <!-- Love Meter -->
+            <div class="section-title animate-in delay-4"><h2>💗 Уровень любви</h2></div>
+            <div class="love-meter animate-in delay-4">
+                <div class="meter-title">
+                    <h3>Шкала обожания</h3>
+                    <div class="meter-value" id="meterPercent">0%</div>
+                </div>
+                <div class="meter-bar"><div class="meter-fill" id="meterFill"></div></div>
+                <div class="meter-milestones">
+                    <span class="milestone reached">💕 Люблю</span>
+                    <span class="milestone reached">😍 Обожаю</span>
+                    <span class="milestone reached">🤯 Безумно</span>
+                    <span class="milestone reached">∞ Бесконечно</span>
+                </div>
+            </div>
+
+            <!-- Mood -->
+            <div class="section-title animate-in delay-4"><h2>🌈 Настроение</h2></div>
+            <div class="mood-section animate-in delay-4">
+                <div class="mood-question">Как ты сегодня? 🤔</div>
+                <div class="mood-options">
+                    <button class="mood-btn" onclick="selectMood(this,'Ты счастлива, и я тоже! 🥳')">😊</button>
+                    <button class="mood-btn" onclick="selectMood(this,'Ты влюблена? Я тоже! 💕')">🥰</button>
+                    <button class="mood-btn" onclick="selectMood(this,'Отправляю обнимашки! 🤗')">😴</button>
+                    <button class="mood-btn" onclick="selectMood(this,'Сейчас рассмешу! 🤪')">😢</button>
+                    <button class="mood-btn" onclick="selectMood(this,'Ты королева! 👑')">🤩</button>
+                </div>
+                <div class="mood-response" id="moodResponse"></div>
+            </div>
+
+            <div style="height:30px"></div>
+        </div>
+
+        <!-- ===== PAGE: CALENDAR ===== -->
+        <div class="page" id="page-calendar">
+            <div class="page-header">
+                <button class="back-btn" onclick="navigateTo('home')">‹</button>
+                <h1 class="page-title">📅 Календарь любви</h1>
+                <div class="page-header-action" id="calAddBtn" style="display:none;" onclick="openAddEventModal()">+</div>
+            </div>
+
+            <!-- Calendar Tabs -->
+            <div class="cal-tabs">
+                <div class="cal-tab active" onclick="switchCalTab('month', this)">Месяц</div>
+                <div class="cal-tab" onclick="switchCalTab('events', this)">Все события</div>
+                <div class="cal-tab" onclick="switchCalTab('special', this)">Праздники</div>
+            </div>
+
+            <!-- Calendar Month View -->
+            <div class="cal-view active" id="calView-month">
+                <div class="calendar-wrapper">
+                    <div class="calendar">
+                        <div class="calendar-header">
+                            <button class="calendar-nav" onclick="changeMonth(-1)">‹</button>
+                            <div class="calendar-month" id="calendarMonth">Февраль <span>2025</span></div>
+                            <button class="calendar-nav" onclick="changeMonth(1)">›</button>
+                        </div>
+                        <div class="calendar-weekdays">
+                            <div class="weekday">Пн</div><div class="weekday">Вт</div>
+                            <div class="weekday">Ср</div><div class="weekday">Чт</div>
+                            <div class="weekday">Пт</div><div class="weekday">Сб</div>
+                            <div class="weekday">Вс</div>
+                        </div>
+                        <div class="calendar-days" id="calendarDays"></div>
+                        <div class="event-legend">
+                            <div class="legend-item"><div class="legend-dot today-dot"></div><span>Сегодня</span></div>
+                            <div class="legend-item"><div class="legend-dot special-dot"></div><span>Праздник</span></div>
+                            <div class="legend-item"><div class="legend-dot event-dot"></div><span>Событие</span></div>
+                            <div class="legend-item"><div class="legend-dot meeting-dot"></div><span>Встреча</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Selected Day Details -->
+                <div class="day-details" id="dayDetails" style="display:none;">
+                    <div class="day-details-header">
+                        <h3 id="dayDetailsTitle">14 Февраля</h3>
+                        <span class="day-details-close" onclick="closeDayDetails()">✕</span>
+                    </div>
+                    <div class="day-details-content" id="dayDetailsContent"></div>
+                </div>
+            </div>
+
+            <!-- Calendar Events View -->
+            <div class="cal-view" id="calView-events">
+                <div class="events-list" id="eventsList"></div>
+            </div>
+
+            <!-- Calendar Special View -->
+            <div class="cal-view" id="calView-special">
+                <div class="special-dates-list" id="specialDatesList"></div>
+            </div>
+        </div>
+
+        <!-- ===== PAGE: LETTERS ===== -->
+        <div class="page" id="page-letters">
+            <div class="page-header">
+                <button class="back-btn" onclick="navigateTo('home')">‹</button>
+                <h1 class="page-title">💌 Любовные письма</h1>
+                <div class="page-header-action" id="letterAddBtn" style="display:none;" onclick="openWriteLetterModal()">✏️</div>
+            </div>
+
+            <div class="letters-tabs">
+                <div class="letter-tab active" onclick="switchLetterTab('inbox', this)">📥 Входящие</div>
+                <div class="letter-tab" onclick="switchLetterTab('sent', this)">📤 Отправленные</div>
+            </div>
+
+            <div class="letters-container" id="lettersInbox"></div>
+            <div class="letters-container" id="lettersSent" style="display:none;"></div>
+
+            <!-- Letter Detail View -->
+            <div class="letter-detail" id="letterDetail" style="display:none;">
+                <div class="letter-detail-paper">
+                    <div class="letter-detail-close" onclick="closeLetterDetail()">✕</div>
+                    <div class="letter-detail-date" id="letterDetailDate"></div>
+                    <div class="letter-detail-from" id="letterDetailFrom"></div>
+                    <div class="letter-detail-body" id="letterDetailBody"></div>
+
+                    <!-- Sticker Reactions -->
+                    <div class="letter-reactions" id="letterReactions"></div>
+                    <div class="reaction-bar">
+                        <span class="reaction-label">Реакция:</span>
+                        <div class="reaction-stickers">
+                            <span class="reaction-sticker" onclick="reactToLetter('❤️')">❤️</span>
+                            <span class="reaction-sticker" onclick="reactToLetter('😍')">😍</span>
+                            <span class="reaction-sticker" onclick="reactToLetter('🥰')">🥰</span>
+                            <span class="reaction-sticker" onclick="reactToLetter('😭')">😭</span>
+                            <span class="reaction-sticker" onclick="reactToLetter('💋')">💋</span>
+                            <span class="reaction-sticker" onclick="reactToLetter('🦋')">🦋</span>
+                            <span class="reaction-sticker" onclick="reactToLetter('✨')">✨</span>
+                            <span class="reaction-sticker" onclick="reactToLetter('🌸')">🌸</span>
+                        </div>
+                    </div>
+
+                    <!-- Reply -->
+                    <div class="letter-reply-section">
+                        <textarea class="letter-reply-input" id="letterReplyInput" placeholder="Написать ответ... 💕"></textarea>
+                        <button class="letter-reply-btn" onclick="sendReply()">Отправить 💌</button>
+                    </div>
+
+                    <!-- Replies Thread -->
+                    <div class="letter-replies" id="letterReplies"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== PAGE: PROFILE ===== -->
+        <div class="page" id="page-profile">
+            <div class="page-header">
+                <button class="back-btn" onclick="navigateTo('home')">‹</button>
+                <h1 class="page-title">👤 Профиль</h1>
+                <div class="page-header-action" onclick="openEditProfileModal()">✏️</div>
+            </div>
+
+            <div class="profile-card">
+                <div class="profile-avatar-large" id="profileAvatar">👸</div>
+                <div class="profile-name" id="profileName">Любимая</div>
+                <div class="profile-role" id="profileRole">💕 Принцесса</div>
+                <div class="profile-stats">
+                    <div class="profile-stat">
+                        <div class="stat-number" id="statLetters">0</div>
+                        <div class="stat-label">Писем</div>
+                    </div>
+                    <div class="profile-stat">
+                        <div class="stat-number" id="statGifts">0</div>
+                        <div class="stat-label">Подарков</div>
+                    </div>
+                    <div class="profile-stat">
+                        <div class="stat-number" id="statDays">0</div>
+                        <div class="stat-label">Дней вместе</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-sections">
+                <div class="profile-section-item" onclick="navigateTo('gallery')">
+                    <div class="psi-icon">📸</div>
+                    <div class="psi-text">
+                        <h3>Фотоальбомы</h3>
+                        <p>Наши лучшие моменты</p>
+                    </div>
+                    <span class="psi-arrow">›</span>
+                </div>
+                <div class="profile-section-item" onclick="navigateTo('gifts')">
+                    <div class="psi-icon">🎁</div>
+                    <div class="psi-text">
+                        <h3>Мои подарки</h3>
+                        <p>Все полученные подарочки</p>
+                    </div>
+                    <span class="psi-arrow">›</span>
+                </div>
+                <div class="profile-section-item" onclick="navigateTo('letters')">
+                    <div class="psi-icon">💌</div>
+                    <div class="psi-text">
+                        <h3>Любовные письма</h3>
+                        <p>Все наши переписки</p>
+                    </div>
+                    <span class="psi-arrow">›</span>
+                </div>
+                <div class="profile-section-item" onclick="showToast('Настройки скоро! ⚙️')">
+                    <div class="psi-icon">⚙️</div>
+                    <div class="psi-text">
+                        <h3>Настройки</h3>
+                        <p>Тема, уведомления</p>
+                    </div>
+                    <span class="psi-arrow">›</span>
+                </div>
+            </div>
+
+            <div class="profile-love-info">
+                <div class="pli-title">💕 Наша история</div>
+                <div class="pli-item">
+                    <span>📅 Вместе с:</span>
+                    <strong id="togetherDate">14 февраля 2024</strong>
+                </div>
+                <div class="pli-item">
+                    <span>💝 Дней вместе:</span>
+                    <strong id="togetherDays">365</strong>
+                </div>
+                <div class="pli-item">
+                    <span>💌 Писем отправлено:</span>
+                    <strong id="totalLetters">0</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== PAGE: GALLERY ===== -->
+        <div class="page" id="page-gallery">
+            <div class="page-header">
+                <button class="back-btn" onclick="navigateTo('home')">‹</button>
+                <h1 class="page-title">📸 Фотоальбомы</h1>
+                <div class="page-header-action" id="galleryAddBtn" style="display:none;" onclick="openAddAlbumModal()">+</div>
+            </div>
+            <div class="albums-grid" id="albumsGrid"></div>
+            <div class="album-photos-view" id="albumPhotosView" style="display:none;">
+                <div class="album-photos-header">
+                    <button class="back-btn" onclick="closeAlbumView()">‹</button>
+                    <h2 id="albumViewTitle">Альбом</h2>
+                    <div class="page-header-action" id="albumAddPhotoBtn" style="display:none;" onclick="openAddPhotoModal()">📷</div>
+                </div>
+                <div class="album-photos-grid" id="albumPhotosGrid"></div>
+            </div>
+        </div>
+
+        <!-- ===== PAGE: GIFTS ===== -->
+        <div class="page" id="page-gifts">
+            <div class="page-header">
+                <button class="back-btn" onclick="navigateTo('home')">‹</button>
+                <h1 class="page-title">🎁 Подарки</h1>
+                <div class="page-header-action" id="giftAddBtn" style="display:none;" onclick="openSendGiftModal()">🎁</div>
+            </div>
+
+            <div class="gifts-balance" id="giftsBalance">
+                <div class="balance-icon">⭐</div>
+                <div class="balance-info">
+                    <div class="balance-label">Баланс звёзд</div>
+                    <div class="balance-amount" id="balanceAmount">0</div>
+                </div>
+                <button class="balance-add-btn" id="balanceAddBtn" style="display:none;" onclick="openAddBalanceModal()">+ Добавить</button>
+            </div>
+
+            <div class="gifts-tabs">
+                <div class="gift-tab active" onclick="switchGiftTab('received', this)">🎀 Полученные</div>
+                <div class="gift-tab" onclick="switchGiftTab('sent', this)" id="giftSentTab" style="display:none;">📤 Отправленные</div>
+            </div>
+
+            <div class="gifts-list" id="giftsReceived"></div>
+            <div class="gifts-list" id="giftsSent" style="display:none;"></div>
+        </div>
+
+        <!-- ===== PAGE: ADMIN ===== -->
+        <div class="page" id="page-admin">
+            <div class="page-header admin-header-bg">
+                <button class="back-btn" onclick="navigateTo('home')">‹</button>
+                <h1 class="page-title">⚙️ Админ-панель</h1>
+            </div>
+
+            <div class="admin-cards">
+                <div class="admin-card" onclick="openAddEventModal()">
+                    <div class="admin-card-icon">📅</div>
+                    <div class="admin-card-title">Добавить дату</div>
+                    <div class="admin-card-desc">Праздники, встречи, события</div>
+                </div>
+                <div class="admin-card" onclick="openWriteLetterModal()">
+                    <div class="admin-card-icon">💌</div>
+                    <div class="admin-card-title">Написать письмо</div>
+                    <div class="admin-card-desc">Отправить любовное послание</div>
+                </div>
+                <div class="admin-card" onclick="openAddAlbumModal()">
+                    <div class="admin-card-icon">📸</div>
+                    <div class="admin-card-title">Создать альбом</div>
+                    <div class="admin-card-desc">Добавить фотоальбом</div>
+                </div>
+                <div class="admin-card" onclick="openSendGiftModal()">
+                    <div class="admin-card-icon">🎁</div>
+                    <div class="admin-card-title">Отправить подарок</div>
+                    <div class="admin-card-desc">Звёзды, деньги, сюрпризы</div>
+                </div>
+            </div>
+
+            <div class="section-title"><h2>📋 Управление событиями</h2></div>
+            <div class="admin-events-list" id="adminEventsList"></div>
+
+            <div class="section-title"><h2>💌 Отправленные письма</h2></div>
+            <div class="admin-letters-list" id="adminLettersList"></div>
+
+            <div class="section-title"><h2>🎁 История подарков</h2></div>
+            <div class="admin-gifts-list" id="adminGiftsList"></div>
+        </div>
+
+    </div>
+
+    <!-- ===== BOTTOM NAV ===== -->
+    <nav class="bottom-nav" id="bottomNav">
+        <div class="nav-item active" data-page="home" onclick="navigateTo('home')">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-label">Главная</span>
+        </div>
+        <div class="nav-item" data-page="calendar" onclick="navigateTo('calendar')">
+            <span class="nav-icon">📅</span>
+            <span class="nav-label">Календарь</span>
+        </div>
+        <div class="nav-center" onclick="launchConfetti(); openModal('💝','Я тебя люблю!','Ты лучшее в моей жизни! 💕✨')">
+            <div class="nav-center-btn">💝</div>
+        </div>
+        <div class="nav-item" data-page="letters" onclick="navigateTo('letters')">
+            <span class="nav-icon">💌</span>
+            <span class="nav-label">Письма</span>
+        </div>
+        <div class="nav-item" data-page="profile" onclick="navigateTo('profile')">
+            <span class="nav-icon">👤</span>
+            <span class="nav-label">Профиль</span>
+        </div>
+    </nav>
+
+    <!-- ===== MODALS FOR ADMIN ===== -->
+    <!-- Add Event Modal -->
+    <div class="modal-overlay" id="addEventModal">
+        <div class="modal modal-form">
+            <button class="modal-close" onclick="closeAllModals()">✕</button>
+            <h2>📅 Добавить событие</h2>
+            <div class="form-group">
+                <label>Название</label>
+                <input type="text" id="eventTitle" placeholder="Романтический ужин..." class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Дата</label>
+                <input type="date" id="eventDate" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Тип</label>
+                <select id="eventType" class="form-input">
+                    <option value="event">📌 Событие</option>
+                    <option value="meeting">🤝 Встреча</option>
+                    <option value="holiday">🎉 Праздник</option>
+                    <option value="date">💕 Свидание</option>
+                    <option value="surprise">🎁 Сюрприз</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Описание</label>
+                <textarea id="eventDesc" placeholder="Описание события..." class="form-textarea"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Эмодзи</label>
+                <div class="emoji-picker">
+                    <span class="ep-item" onclick="pickEventEmoji('💕')">💕</span>
+                    <span class="ep-item" onclick="pickEventEmoji('🌹')">🌹</span>
+                    <span class="ep-item" onclick="pickEventEmoji('🎂')">🎂</span>
+                    <span class="ep-item" onclick="pickEventEmoji('🎉')">🎉</span>
+                    <span class="ep-item" onclick="pickEventEmoji('🍽️')">🍽️</span>
+                    <span class="ep-item" onclick="pickEventEmoji('🎬')">🎬</span>
+                    <span class="ep-item" onclick="pickEventEmoji('✈️')">✈️</span>
+                    <span class="ep-item" onclick="pickEventEmoji('💎')">💎</span>
+                    <span class="ep-item" onclick="pickEventEmoji('🌅')">🌅</span>
+                    <span class="ep-item" onclick="pickEventEmoji('🎁')">🎁</span>
+                </div>
+                <input type="hidden" id="eventEmoji" value="💕">
+            </div>
+            <button class="modal-btn" onclick="saveEvent()">Добавить событие 📅</button>
+        </div>
+    </div>
+
+    <!-- Write Letter Modal -->
+    <div class="modal-overlay" id="writeLetterModal">
+        <div class="modal modal-form">
+            <button class="modal-close" onclick="closeAllModals()">✕</button>
+            <h2>💌 Написать письмо</h2>
+            <div class="form-group">
+                <label>Заголовок</label>
+                <input type="text" id="letterTitle" placeholder="Моя любимая..." class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Текст письма</label>
+                <textarea id="letterBody" placeholder="Напиши свои чувства..." class="form-textarea large"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Настроение письма</label>
+                <div class="emoji-picker">
+                    <span class="ep-item" onclick="pickLetterMood('💕')">💕</span>
+                    <span class="ep-item" onclick="pickLetterMood('🔥')">🔥</span>
+                    <span class="ep-item" onclick="pickLetterMood('🥺')">🥺</span>
+                    <span class="ep-item" onclick="pickLetterMood('🌙')">🌙</span>
+                    <span class="ep-item" onclick="pickLetterMood('☀️')">☀️</span>
+                    <span class="ep-item" onclick="pickLetterMood('🦋')">🦋</span>
+                </div>
+                <input type="hidden" id="letterMood" value="💕">
+            </div>
+            <button class="modal-btn" onclick="sendLetter()">Отправить письмо 💌</button>
+        </div>
+    </div>
+
+    <!-- Send Gift Modal -->
+    <div class="modal-overlay" id="sendGiftModal">
+        <div class="modal modal-form">
+            <button class="modal-close" onclick="closeAllModals()">✕</button>
+            <h2>🎁 Отправить подарок</h2>
+            <div class="gift-types-grid">
+                <div class="gift-type-card" onclick="selectGiftType('stars', this)">
+                    <span class="gtc-icon">⭐</span>
+                    <span class="gtc-name">Звёзды</span>
+                </div>
+                <div class="gift-type-card" onclick="selectGiftType('flowers', this)">
+                    <span class="gtc-icon">💐</span>
+                    <span class="gtc-name">Цветы</span>
+                </div>
+                <div class="gift-type-card" onclick="selectGiftType('ring', this)">
+                    <span class="gtc-icon">💍</span>
+                    <span class="gtc-name">Кольцо</span>
+                </div>
+                <div class="gift-type-card" onclick="selectGiftType('chocolate', this)">
+                    <span class="gtc-icon">🍫</span>
+                    <span class="gtc-name">Шоколад</span>
+                </div>
+                <div class="gift-type-card" onclick="selectGiftType('bear', this)">
+                    <span class="gtc-icon">🧸</span>
+                    <span class="gtc-name">Мишка</span>
+                </div>
+                <div class="gift-type-card" onclick="selectGiftType('money', this)">
+                    <span class="gtc-icon">💰</span>
+                    <span class="gtc-name">Деньги</span>
+                </div>
+                <div class="gift-type-card" onclick="selectGiftType('heart', this)">
+                    <span class="gtc-icon">💝</span>
+                    <span class="gtc-name">Сердце</span>
+                </div>
+                <div class="gift-type-card" onclick="selectGiftType('crown', this)">
+                    <span class="gtc-icon">👑</span>
+                    <span class="gtc-name">Корона</span>
+                </div>
+            </div>
+            <div class="form-group" id="giftAmountGroup" style="display:none;">
+                <label>Количество</label>
+                <input type="number" id="giftAmount" placeholder="100" class="form-input" min="1">
+            </div>
+            <div class="form-group">
+                <label>Послание к подарку</label>
+                <input type="text" id="giftMessage" placeholder="С любовью! 💕" class="form-input">
+            </div>
+            <input type="hidden" id="giftType" value="">
+            <button class="modal-btn" onclick="sendGift()">Подарить 🎁</button>
+        </div>
+    </div>
+
+    <!-- Add Album Modal -->
+    <div class="modal-overlay" id="addAlbumModal">
+        <div class="modal modal-form">
+            <button class="modal-close" onclick="closeAllModals()">✕</button>
+            <h2>📸 Создать альбом</h2>
+            <div class="form-group">
+                <label>Название альбома</label>
+                <input type="text" id="albumTitle" placeholder="Наше путешествие..." class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Обложка (эмодзи)</label>
+                <div class="emoji-picker">
+                    <span class="ep-item" onclick="pickAlbumCover('🌅')">🌅</span>
+                    <span class="ep-item" onclick="pickAlbumCover('🏖️')">🏖️</span>
+                    <span class="ep-item" onclick="pickAlbumCover('🎄')">🎄</span>
+                    <span class="ep-item" onclick="pickAlbumCover('💑')">💑</span>
+                    <span class="ep-item" onclick="pickAlbumCover('🎂')">🎂</span>
+                    <span class="ep-item" onclick="pickAlbumCover('✈️')">✈️</span>
+                    <span class="ep-item" onclick="pickAlbumCover('🏠')">🏠</span>
+                    <span class="ep-item" onclick="pickAlbumCover('🎡')">🎡</span>
+                </div>
+                <input type="hidden" id="albumCover" value="💑">
+            </div>
+            <div class="form-group">
+                <label>Описание</label>
+                <textarea id="albumDesc" placeholder="Описание альбома..." class="form-textarea"></textarea>
+            </div>
+            <button class="modal-btn" onclick="saveAlbum()">Создать альбом 📸</button>
+        </div>
+    </div>
+
+    <!-- Add Photo Modal -->
+    <div class="modal-overlay" id="addPhotoModal">
+        <div class="modal modal-form">
+            <button class="modal-close" onclick="closeAllModals()">✕</button>
+            <h2>📷 Добавить фото</h2>
+            <div class="form-group">
+                <label>Подпись</label>
+                <input type="text" id="photoCaption" placeholder="Описание момента..." class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Эмодзи / Стикер</label>
+                <div class="emoji-picker">
+                    <span class="ep-item" onclick="pickPhotoEmoji('📸')">📸</span>
+                    <span class="ep-item" onclick="pickPhotoEmoji('🥰')">🥰</span>
+                    <span class="ep-item" onclick="pickPhotoEmoji('💕')">💕</span>
+                    <span class="ep-item" onclick="pickPhotoEmoji('🌅')">🌅</span>
+                    <span class="ep-item" onclick="pickPhotoEmoji('🤗')">🤗</span>
+                    <span class="ep-item" onclick="pickPhotoEmoji('😘')">😘</span>
+                    <span class="ep-item" onclick="pickPhotoEmoji('🎉')">🎉</span>
+                    <span class="ep-item" onclick="pickPhotoEmoji('🧁')">🧁</span>
+                </div>
+                <input type="hidden" id="photoEmoji" value="📸">
+            </div>
+            <button class="modal-btn" onclick="savePhoto()">Добавить 📷</button>
+        </div>
+    </div>
+
+    <!-- Add Balance Modal -->
+    <div class="modal-overlay" id="addBalanceModal">
+        <div class="modal modal-form">
+            <button class="modal-close" onclick="closeAllModals()">✕</button>
+            <h2>⭐ Добавить звёзды</h2>
+            <div class="form-group">
+                <label>Количество звёзд</label>
+                <input type="number" id="addBalanceAmount" placeholder="100" class="form-input" min="1">
+            </div>
+            <button class="modal-btn" onclick="addBalance()">Добавить ⭐</button>
+        </div>
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div class="modal-overlay" id="editProfileModal">
+        <div class="modal modal-form">
+            <button class="modal-close" onclick="closeAllModals()">✕</button>
+            <h2>✏️ Редактировать профиль</h2>
+            <div class="form-group">
+                <label>Имя</label>
+                <input type="text" id="editName" placeholder="Имя..." class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Дата начала отношений</label>
+                <input type="date" id="editStartDate" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Аватар</label>
+                <div class="emoji-picker">
+                    <span class="ep-item" onclick="pickProfileAvatar('👸')">👸</span>
+                    <span class="ep-item" onclick="pickProfileAvatar('🧑')">🧑</span>
+                    <span class="ep-item" onclick="pickProfileAvatar('👩')">👩</span>
+                    <span class="ep-item" onclick="pickProfileAvatar('💃')">💃</span>
+                    <span class="ep-item" onclick="pickProfileAvatar('🦄')">🦄</span>
+                    <span class="ep-item" onclick="pickProfileAvatar('🐱')">🐱</span>
+                    <span class="ep-item" onclick="pickProfileAvatar('🌸')">🌸</span>
+                    <span class="ep-item" onclick="pickProfileAvatar('🦋')">🦋</span>
+                </div>
+                <input type="hidden" id="editAvatar" value="👸">
+            </div>
+            <button class="modal-btn" onclick="saveProfile()">Сохранить 💕</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <!-- JS: порядок важен! -->
+        <!-- Scripts (порядок важен!) -->
+    <script src="js/storage.js"></script>
+    <script src="js/effects.js"></script>
+    <script src="js/calendar.js"></script>
+    <script src="js/letters.js"></script>
+    <script src="js/gifts.js"></script>
+    <script src="js/photos.js"></script>
+    <script src="js/profile.js"></script>
+    <script src="js/admin.js"></script>
+    <script src="js/navigation.js"></script>
+    <script src="js/notifications.js"></script>
+    <script src="js/features.js"></script>
+    <script src="js/telegram.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+meta:
+  environment: nodejs
+  toolchain:
+    name: nodejs
+    version: 20
+
+build:
+  npm:
+    - install
+
+run:
+  persistenceMount: /data
+  containerPort: 3000
+  command: node server.js
