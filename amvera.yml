@@ -4,12 +4,16 @@ meta:
     name: npm
     version: 20
 
+build:
+  npm:
+    install:
+      - install
+
+artifacts:
+  - from: /
+    to: /
+
 run:
-  scriptName: server.js
-  command: npm run start
+  command: node server.js
   persistenceMount: /data
-<<<<<<< HEAD
   containerPort: 3000
-=======
-  containerPort: 3000
->>>>>>> fc875953b67b8e8e7cf18583c28a4e892d509bb6
