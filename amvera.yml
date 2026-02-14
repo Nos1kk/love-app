@@ -5,7 +5,8 @@ meta:
     version: 20
 
 build:
-  skip: true
+  npm:
+    - install
 
 run:
   scriptName: server.js
