@@ -2,30 +2,35 @@ const express = require('express');
 const path = require('path');
 const TelegramBot = require('node-telegram-bot-api');
 
-// ========== КОНФИГУРАЦИЯ ==========
-const BOT_TOKEN = process.env.BOT_TOKEN || '8571890995:AAGls0kbQVVFt6FSHz20LwpQ5-YztJNpoX4';
+const BOT_TOKEN = process.env.BOT_TOKEN || 'YOUR_TOKEN';
 const PORT = process.env.PORT || 3000;
-
-// ВАЖНО: этот URL ты заменишь после создания проекта в Amvera
-// Формат: https://love-app-ИМЯ.amvera.io
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://love-app.amvera.io';
 
-// ========== EXPRESS ==========
-const appServer = express();
+const app = express();
 
-appServer.use(express.static(path.join(__dirname)));
-appServer.use(express.json());
-
-// Health check — Amvera проверяет что сервер жив
-appServer.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok', uptime: process.uptime() });
+// Безопасные заголовки
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'ALLOWALL');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
 });
 
-appServer.get('/', (req, res) => {
+app.use(express.static(path.join(__dirname), {
+    maxAge: '1h',
+    etag: true
+}));
+app.use(express.json({ limit: '10mb' }));
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', uptime: process.uptime() });
+});
+
+app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-appServer.post('/api/notify', (req, res) => {
+app.post('/api/notify', (req, res) => {
     const { userId, message } = req.body;
     if (userId && message) {
         bot.sendMessage(userId, message).catch(console.error);
@@ -35,32 +40,36 @@ appServer.post('/api/notify', (req, res) => {
     }
 });
 
-// Слушаем на 0.0.0.0 — обязательно для Amvera!
-appServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Сервер запущен на порту ${PORT}`);
-    console.log(`🌐 WebApp URL: ${WEBAPP_URL}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server on port ${PORT}`);
 });
 
-// ========== TELEGRAM BOT ==========
+// ========== BOT ==========
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
-    const firstName = msg.from.first_name || 'Любимая';
+    const name = msg.from.first_name || 'Любимая';
 
-    bot.sendMessage(chatId,
-        `💕 Привет, ${firstName}!\n\n` +
-        `Добро пожаловать в наше приложение!\n` +
-        `Здесь тебя ждут письма, подарки и сюрпризы ✨\n\n` +
-        `Нажми кнопку ниже, чтобы открыть 👇`,
-        {
-            reply_markup: {
-                inline_keyboard: [[
-                    { text: '💕 Открыть приложение', web_app: { url: WEBAPP_URL } }
-                ]]
-            }
+    bot.sendPhoto(chatId, 'https://i.imgur.com/placeholder.jpg', {
+        caption: `💕 Привет, ${name}!\n\nДобро пожаловать в наше приложение любви!\nЗдесь тебя ждут письма, подарки и сюрпризы ✨`,
+        reply_markup: {
+            inline_keyboard: [[
+                { text: '💕 Открыть приложение', web_app: { url: WEBAPP_URL } }
+            ]]
         }
-    );
+    }).catch(() => {
+        bot.sendMessage(chatId,
+            `💕 Привет, ${name}!\n\nОткрой наше приложение любви! ✨`,
+            {
+                reply_markup: {
+                    inline_keyboard: [[
+                        { text: '💕 Открыть', web_app: { url: WEBAPP_URL } }
+                    ]]
+                }
+            }
+        );
+    });
 });
 
 bot.onText(/\/menu/, (msg) => {
@@ -74,7 +83,7 @@ bot.onText(/\/menu/, (msg) => {
                 ],
                 [
                     { text: '📅 Календарь', web_app: { url: WEBAPP_URL + '#calendar' } },
-                    { text: '📸 Фото', web_app: { url: WEBAPP_URL + '#gallery' } }
+                    { text: '👤 Профиль', web_app: { url: WEBAPP_URL + '#profile' } }
                 ]
             ]
         }
@@ -82,19 +91,18 @@ bot.onText(/\/menu/, (msg) => {
 });
 
 bot.onText(/\/love/, (msg) => {
-    const compliments = [
+    const c = [
         'Ты освещаешь мой мир ярче тысячи звёзд ⭐',
         'Каждый день с тобой — подарок судьбы 🎁',
         'Ты самая красивая во вселенной 💫',
         'Я влюбляюсь в тебя сильнее каждый день 💗',
-        'Рядом с тобой я самый счастливый 🥰',
     ];
-    bot.sendMessage(msg.chat.id, `💕 ${compliments[Math.floor(Math.random() * compliments.length)]}`);
+    bot.sendMessage(msg.chat.id, `💕 ${c[Math.floor(Math.random() * c.length)]}`);
 });
 
 bot.onText(/\/days/, (msg) => {
     const days = Math.floor((new Date() - new Date('2023-10-22')) / 86400000);
-    bot.sendMessage(msg.chat.id, `💑 Мы вместе уже ${days} дней!\n📅 С 22 октября 2023\n\nКаждый день — счастье! 💕`);
+    bot.sendMessage(msg.chat.id, `💑 Мы вместе ${days} дней!\n💕 С 22 октября 2023`);
 });
 
 bot.onText(/\/help/, (msg) => {
@@ -107,11 +115,9 @@ bot.on('web_app_data', (msg) => {
     try {
         const data = JSON.parse(msg.web_app_data.data);
         if (data.type === 'order') {
-            bot.sendMessage(msg.chat.id, `🛒 Заказ!\n📦 ${data.itemName}\n⭐ ${data.price} звёзд`);
+            bot.sendMessage(msg.chat.id, `🛒 Заказ: ${data.itemName} за ${data.price} ⭐`);
         }
-    } catch (e) {
-        console.error('WebApp data error:', e);
-    }
+    } catch (e) { console.error(e); }
 });
 
-console.log('🤖 Бот запущен!');
+console.log('🤖 Bot started!');
