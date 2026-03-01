@@ -271,21 +271,30 @@ class PhotosManager {
         const savedFiles = [];
         
         for (const file of this._selectedFiles) {
-            // Для больших файлов конвертируем в base64 только при сохранении
-            let fileData = file.data;
-            
-            if (file.file && file.file.size < 5 * 1024 * 1024) {
-                // Маленькие файлы — base64
-                fileData = await this.fileToBase64(file.file);
+        let fileData;
+
+        if (file.file) {
+            // Предупреждение для больших файлов
+            if (file.file.size > 5 * 1024 * 1024) {
+                window.app?.toast?.show('⚠️ Большие файлы могут не сохраниться');
             }
-            
-            savedFiles.push({
-                name: file.name,
-                type: file.type,
-                size: file.size,
-                data: fileData
-            });
+
+            try {
+                fileData = await this.fileToBase64(file.file);
+            } catch (e) {
+                console.error('File too large for localStorage:', e);
+                window.app?.toast?.show(`${file.name} слишком большой для хранения`);
+                continue;
+            }
         }
+
+        savedFiles.push({
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            data: fileData || file.data
+        });
+    }
 
         const hasVideo = this._selectedFiles.some(f => f.type === 'video');
 

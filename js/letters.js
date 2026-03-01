@@ -679,14 +679,37 @@ class LettersManager {
     }
 
     refreshLettersList() {
-        const container = document.getElementById('lettersList');
+        const container = document.getElementById('lettersInbox');
         if (container) {
             const letters = this.storage.getLetters();
-            container.innerHTML = letters.length === 0
-                ? this.renderEmptyLetters()
-                : letters.map(l => this.renderLetterCard(l)).join('');
+            if (letters.length === 0) {
+                container.innerHTML = this.renderEmptyLetters();
+            } else {
+                container.innerHTML = letters.map(l => this.renderLetterItem(l)).join('');
+            }
         }
     }
+
+    renderLetterItem(letter) {
+    const date = new Date(letter.date);
+    const timeAgo = this.getTimeAgo(date);
+    const hasReplies = letter.replies && letter.replies.length > 0;
+
+    return `
+        <div class="letter-item ${letter.read ? '' : 'unread'}"
+             onclick="app.letters.openLetter('${letter.id}')">
+            ${!letter.read ? '<div class="letter-unread-dot"></div>' : ''}
+            <div class="letter-item-icon">${letter.mood || '💌'}</div>
+            <div class="letter-item-info">
+                <h4>${letter.subject || 'Без темы'}</h4>
+                <p>${letter.text.substring(0, 60)}...</p>
+            </div>
+            <div class="letter-item-date">${timeAgo}</div>
+            ${letter.favorite ? '<div class="letter-item-mood">⭐</div>' : ''}
+            ${hasReplies ? '<div class="letter-item-mood">💬</div>' : ''}
+        </div>
+    `;
+}
 
     // ========== HELPERS ==========
     getTimeAgo(date) {

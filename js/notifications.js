@@ -34,18 +34,18 @@ class NotificationManager {
 
     checkNewNotifications() {
         const notifications = this.storage.getNotifications();
-        const unread = notifications.filter(n => !n.read && new Date(n.date) > this.lastCheck);
-        
-        if (unread.length > 0) {
-            unread.forEach(n => {
-                this.showInAppNotification(n);
-                this.showBrowserNotification(n);
-            });
-            this.lastCheck = Date.now();
-        }
-        
-        // Обновить бейдж
-        this.updateNotificationBadge();
+        const newNotifs = notifications.filter(n =>
+        !n.read && new Date(n.date).getTime() > this.lastCheck
+    );
+
+    if (newNotifs.length > 0) {
+        // Показать только самое новое
+        this.showInAppNotification(newNotifs[0]);
+        this.lastCheck = Date.now();
+    }
+
+    this.updateNotificationBadge();
+
     }
 
     // Красивое всплывающее уведомление внутри приложения
