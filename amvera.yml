@@ -1,15 +1,9 @@
-# amvera.yml
 meta:
-  environment: nodejs
+  environment: node
   toolchain:
-    name: nodejs
-    version: 18
-
-build:
-  npm:
-    - install
+    name: npm
+    version: 20
 
 run:
-  persistenceMount: /data
-  containerPort: 3000
   command: node server.js
+  containerPort: 3000
