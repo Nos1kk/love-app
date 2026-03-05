@@ -402,3 +402,11 @@
     font-size: 10px;
     color: var(--text-light);
 }
+/* Добавить в конец css/admin.css */
+
+.admin-section-label {
+    padding: 14px 20px 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-dark);
+}

@@ -1,201 +1,198 @@
-// js/storage.js — Хранилище данных (localStorage) — ИСПРАВЛЕНО
+// js/storage.js — Хранилище с серверной синхронизацией
 
 class DataStorage {
     constructor() {
         this.prefix = 'loveapp_';
+        this._serverVersion = 0;
+        this._pollInterval = null;
+        this._apiBase = '';
+        this._syncing = false;
+        
         this.initDefaults();
     }
 
     // ========== INIT ==========
     initDefaults() {
-        if (!this.get('profile')) {
-            this.set('profile', {
-                userName: 'Любимая',
-                userStatus: 'Самая красивая на свете 💕',
-                adminName: 'Любимый',
-                coupleDate: '22 октября 2023',
-                coupleDateRaw: '2023-10-22',
-                notifications: true,
-                letterNotifications: true,
-                giftNotifications: true,
-                theme: 'pink',
-                isAdmin: false,
-                userStars: 50,
-                adminStars: 100,
-                avatarEmoji: null,
-                avatarUrl: null,
-                nameSetManually: false
-            });
-        }
-
-        if (!this.get('stats')) {
-            this.set('stats', {
-                daysTogether: 0,
-                lettersReceived: 0,
-                lettersSent: 0,
-                giftsReceived: 0,
-                giftsSent: 0,
-                eventsMade: 0,
-                reactionsGiven: 0,
-                loveLevel: 1,
-                loveXP: 0
-            });
-        }
-
-        if (!this.get('letters')) this.set('letters', []);
-        if (!this.get('events')) this.set('events', []);
-        if (!this.get('gifts')) this.set('gifts', []);
-        if (!this.get('photos')) this.set('photos', []);
-        if (!this.get('albums')) this.set('albums', []);
-        if (!this.get('notifications')) this.set('notifications', []);
-        if (!this.get('orders')) this.set('orders', []);
-        if (!this.get('goals')) this.set('goals', []);
-        if (!this.get('quickNotes')) this.set('quickNotes', []);
-
-        if (!this.get('specialDates')) {
-            const year = new Date().getFullYear();
-            this.set('specialDates', [
-                { id: 'sd_1', date: `${year}-02-14`, title: 'День Святого Валентина', emoji: '💝' },
-                { id: 'sd_2', date: `${year}-03-08`, title: '8 Марта', emoji: '🌷' },
-            ]);
-        }
-
-        // Миграция старых данных: daysTogther -> daysTogether
-        const stats = this.get('stats');
-        if (stats && stats.daysTogther !== undefined && stats.daysTogether === undefined) {
-            stats.daysTogether = stats.daysTogther;
-            delete stats.daysTogther;
-            this.set('stats', stats);
-        }
-
-        this.updateDaysTogether();
-
-        if (this.getLetters().length === 0) {
-            this.addDemoData();
-        }
-    }
-
-    addDemoData() {
-        const now = new Date();
-        const day = 86400000;
-
-        this.set('letters', [
-            {
-                id: 'letter_demo_1',
-                from: 'admin',
-                subject: 'Доброе утро, солнышко!',
-                text: 'Каждое утро я просыпаюсь и благодарю судьбу за то, что ты есть. Ты делаешь мою жизнь волшебной! ✨\n\nЛюблю тебя бесконечно 💕',
-                mood: '☀️',
-                date: new Date(now - 2 * day).toISOString(),
-                read: false,
-                favorite: false,
-                reactions: [
-                    { emoji: '❤️', from: 'user', date: new Date(now - day).toISOString() }
-                ],
-                replies: []
-            },
-            {
-                id: 'letter_demo_2',
-                from: 'admin',
-                subject: 'Ты — моя вселенная',
-                text: 'Знаешь, что самое прекрасное в моей жизни? Это ты. Твоя улыбка, твой смех, твои глаза — всё это делает каждый день особенным.\n\nТы моя звёздочка! ⭐',
-                mood: '🌙',
-                date: new Date(now - 5 * day).toISOString(),
-                read: true,
-                favorite: true,
-                reactions: [],
-                replies: [
-                    {
-                        id: 'reply_demo_1',
-                        text: 'Спасибо, мой хороший! Ты самый лучший! 💕🥰',
-                        from: 'user',
-                        date: new Date(now - 4 * day).toISOString()
-                    }
-                ]
-            },
-            {
-                id: 'letter_demo_3',
-                from: 'admin',
-                subject: 'Скучаю...',
-                text: 'Каждая минута без тебя — как вечность. Хочу обнять тебя крепко-крепко и никогда не отпускать! 🤗',
-                mood: '🥺',
-                date: new Date(now - 10 * day).toISOString(),
-                read: true,
-                favorite: false,
-                reactions: [],
-                replies: []
+        // Инициализация localStorage как кэша
+        const keys = ['profile','stats','letters','events','gifts','photos','albums',
+                      'notifications','orders','goals','quickNotes','specialDates'];
+        
+        keys.forEach(key => {
+            if (!this.get(key)) {
+                if (key === 'profile') {
+                    this.set(key, {
+                        userName: 'Любимая', adminName: 'Любимый',
+                        userStatus: '', coupleDate: '22 октября 2023',
+                        coupleDateRaw: '2023-10-22', notifications: true,
+                        theme: 'pink', isAdmin: false, userStars: 50,
+                        adminStars: 100, avatarEmoji: null, avatarUrl: null
+                    });
+                } else if (key === 'stats') {
+                    this.set(key, { daysTogether: 0, lettersReceived: 0, giftsReceived: 0, eventsMade: 0, reactionsGiven: 0 });
+                } else if (key === 'specialDates') {
+                    const year = new Date().getFullYear();
+                    this.set(key, [
+                        { id: 'sd_1', date: `${year}-02-14`, title: 'День Святого Валентина', emoji: '💝' },
+                        { id: 'sd_2', date: `${year}-03-08`, title: '8 Марта', emoji: '🌷' },
+                    ]);
+                } else {
+                    this.set(key, []);
+                }
             }
-        ]);
-
-        this.set('events', [
-            {
-                id: 'event_demo_1',
-                title: 'Романтический ужин',
-                date: this.getNextDateStr(3),
-                time: '19:00',
-                description: 'Ужин в нашем любимом ресторане',
-                type: 'dinner',
-                repeat: 'none',
-                reminder: '1d'
-            },
-            {
-                id: 'event_demo_2',
-                title: 'Кино вдвоём',
-                date: this.getNextDateStr(7),
-                time: '18:00',
-                description: 'Новый фильм!',
-                type: 'date',
-                repeat: 'none',
-                reminder: '1d'
-            }
-        ]);
-
-        this.set('gifts', [
-            {
-                id: 'gift_demo_1',
-                giftId: 'hug',
-                emoji: '🤗',
-                name: 'Обнимашки',
-                message: 'Обнимаю тебя крепко-крепко! 💕',
-                from: 'admin',
-                to: 'user',
-                date: new Date().toISOString(),
-                opened: false
-            }
-        ]);
-
-        this.set('albums', [
-            { id: 'album_demo_1', name: 'Наши моменты', coverEmoji: '💑', photoCount: 3, createdAt: new Date().toISOString() },
-            { id: 'album_demo_2', name: 'Путешествия', coverEmoji: '✈️', photoCount: 0, createdAt: new Date().toISOString() },
-        ]);
-
-        this.set('photos', [
-            { id: 'photo_demo_1', emoji: '💑', caption: 'Первое свидание', albumId: 'album_demo_1', date: new Date().toISOString(), isNew: false, files: [] },
-            { id: 'photo_demo_2', emoji: '🌅', caption: 'Закат вместе', albumId: 'album_demo_1', date: new Date().toISOString(), isNew: false, files: [] },
-            { id: 'photo_demo_3', emoji: '🎂', caption: 'День рождения', albumId: 'album_demo_1', date: new Date().toISOString(), isNew: true, files: [] },
-        ]);
-
-        this.updateStats({
-            lettersReceived: 3,
-            giftsReceived: 1,
-            eventsMade: 2,
-            loveLevel: 2,
-            loveXP: 45
         });
+
+        // Начать polling сервера
+        this.startServerSync();
     }
 
-    getNextDateStr(daysFromNow) {
-        const d = new Date();
-        d.setDate(d.getDate() + daysFromNow);
-        return d.toISOString().split('T')[0];
+    // ========== SERVER SYNC ==========
+    startServerSync() {
+        // Первая загрузка с сервера
+        this.fetchServerState();
+        
+        // Polling каждые 3 секунды
+        this._pollInterval = setInterval(() => {
+            this.checkServerUpdates();
+        }, 3000);
     }
 
-    updateDaysTogether() {
-        const profile = this.getProfile();
-        if (profile.coupleDateRaw) {
-            const days = Math.floor((new Date() - new Date(profile.coupleDateRaw)) / 86400000);
-            this.updateStats({ daysTogether: Math.max(0, days) });
+    stopServerSync() {
+        if (this._pollInterval) {
+            clearInterval(this._pollInterval);
+            this._pollInterval = null;
         }
+    }
+
+    async fetchServerState() {
+        try {
+            const resp = await fetch(`${this._apiBase}/api/state?since=0`);
+            if (!resp.ok) return;
+            const result = await resp.json();
+            
+            if (result.changed && result.data) {
+                this.applyServerData(result.data);
+                this._serverVersion = result.version;
+            }
+        } catch (e) {
+            console.log('Server fetch failed, using local cache');
+        }
+    }
+
+    async checkServerUpdates() {
+        if (this._syncing) return;
+        
+        try {
+            const resp = await fetch(`${this._apiBase}/api/version`);
+            if (!resp.ok) return;
+            const { version } = await resp.json();
+            
+            if (version > this._serverVersion) {
+                this._syncing = true;
+                const stateResp = await fetch(`${this._apiBase}/api/state?since=${this._serverVersion}`);
+                if (stateResp.ok) {
+                    const result = await stateResp.json();
+                    if (result.changed && result.data) {
+                        this.applyServerData(result.data);
+                        this._serverVersion = result.version;
+                        
+                        // Обновить UI
+                        if (window.app) {
+                            window.app.nav?.updateBadges();
+                            window.app.notifications?.updateNotificationBadge();
+                            
+                            // Обновить текущую страницу
+                            const page = window.app.currentPage;
+                            if (page === 'home') {
+                                window.app.updateUpcomingEvents();
+                            } else if (page === 'letters') {
+                                window.app.renderLettersContent();
+                            } else if (page === 'gifts') {
+                                window.app.renderGiftsContent();
+                            } else if (page === 'calendar') {
+                                window.app.calendar?.renderCalendar();
+                            } else if (page === 'admin') {
+                                window.app.admin?.renderFullAdmin();
+                            }
+                        }
+                    }
+                }
+                this._syncing = false;
+            }
+        } catch (e) {
+            this._syncing = false;
+        }
+    }
+
+    applyServerData(data) {
+        const localProfile = this.get('profile') || {};
+        const isAdmin = localProfile.isAdmin;
+        
+        // Обновляем данные из сервера, сохраняя isAdmin из локального
+        if (data.profile) {
+            this.set('profile', { ...data.profile, isAdmin });
+        }
+        if (data.letters) this.set('letters', data.letters);
+        if (data.events) this.set('events', data.events);
+        if (data.gifts) this.set('gifts', data.gifts);
+        if (data.albums) this.set('albums', data.albums);
+        if (data.photos) this.set('photos', data.photos);
+        if (data.specialDates) this.set('specialDates', data.specialDates);
+        if (data.notifications) this.set('notifications', data.notifications);
+        if (data.orders) this.set('orders', data.orders);
+        if (data.goals) this.set('goals', data.goals);
+        if (data.quickNotes) this.set('quickNotes', data.quickNotes);
+        if (data.stats) this.set('stats', data.stats);
+    }
+
+    // Отправить данные на сервер
+    async serverPost(endpoint, data) {
+        try {
+            const resp = await fetch(`${this._apiBase}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (resp.ok) {
+                const result = await resp.json();
+                if (result.version) this._serverVersion = result.version;
+                return result;
+            }
+        } catch (e) {
+            console.log('Server post failed:', endpoint);
+        }
+        return null;
+    }
+
+    async serverPut(endpoint, data) {
+        try {
+            const resp = await fetch(`${this._apiBase}${endpoint}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (resp.ok) {
+                const result = await resp.json();
+                if (result.version) this._serverVersion = result.version;
+                return result;
+            }
+        } catch (e) {
+            console.log('Server put failed:', endpoint);
+        }
+        return null;
+    }
+
+    async serverDelete(endpoint) {
+        try {
+            const resp = await fetch(`${this._apiBase}${endpoint}`, { method: 'DELETE' });
+            if (resp.ok) {
+                const result = await resp.json();
+                if (result.version) this._serverVersion = result.version;
+                return result;
+            }
+        } catch (e) {
+            console.log('Server delete failed:', endpoint);
+        }
+        return null;
     }
 
     // ========== GENERIC ==========
@@ -204,7 +201,6 @@ class DataStorage {
             const data = localStorage.getItem(this.prefix + key);
             return data ? JSON.parse(data) : null;
         } catch (e) {
-            console.error('Storage get error:', key, e);
             return null;
         }
     }
@@ -213,25 +209,18 @@ class DataStorage {
         try {
             localStorage.setItem(this.prefix + key, JSON.stringify(value));
         } catch (e) {
-            console.error('Storage set error:', key, e);
-            // Если localStorage переполнен — попробовать почистить фото
             if (e.name === 'QuotaExceededError') {
                 this.cleanupStorage();
-                try {
-                    localStorage.setItem(this.prefix + key, JSON.stringify(value));
-                } catch (e2) {
-                    console.error('Storage still full after cleanup');
-                }
+                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); } catch(e2) {}
             }
         }
     }
 
     cleanupStorage() {
-        // Удалить самые старые фото с файлами для освобождения места
         const photos = this.get('photos') || [];
-        const photosWithFiles = photos.filter(p => p.files && p.files.length > 0 && p.files[0].data);
-        if (photosWithFiles.length > 0) {
-            photosWithFiles[0].files = [];
+        const withFiles = photos.filter(p => p.files?.length > 0 && p.files[0]?.data);
+        if (withFiles.length > 0) {
+            withFiles[0].files = [];
             this.set('photos', photos);
         }
     }
@@ -241,15 +230,20 @@ class DataStorage {
 
     updateProfile(updates) {
         const profile = this.getProfile();
-        this.set('profile', { ...profile, ...updates });
+        const merged = { ...profile, ...updates };
+        this.set('profile', merged);
+        
+        // Синхронизировать с сервером (без isAdmin)
+        const { isAdmin, ...serverProfile } = merged;
+        this.serverPut('/api/profile', serverProfile);
     }
 
     // ========== STATS ==========
     getStats() { return this.get('stats') || {}; }
 
     updateStats(updates) {
-        const stats = this.getStats();
-        this.set('stats', { ...stats, ...updates });
+        const stats = { ...this.getStats(), ...updates };
+        this.set('stats', stats);
     }
 
     // ========== LETTERS ==========
@@ -262,15 +256,16 @@ class DataStorage {
     }
 
     addLetter(letter) {
-        const letters = this.get('letters') || [];
-        // Убедиться что replies — массив
         if (!letter.replies) letter.replies = [];
         if (!letter.reactions) letter.reactions = [];
-        letters.push(letter);
+        
+        const letters = this.get('letters') || [];
+        letters.unshift(letter);
         this.set('letters', letters);
-        // Обновить статистику
-        const stats = this.getStats();
-        this.updateStats({ lettersReceived: (stats.lettersReceived || 0) + 1 });
+        this.updateStats({ lettersReceived: letters.length });
+        
+        // Синхронизировать с сервером
+        this.serverPost('/api/letters', letter);
     }
 
     markLetterRead(id) {
@@ -279,6 +274,7 @@ class DataStorage {
         if (idx >= 0) {
             letters[idx].read = true;
             this.set('letters', letters);
+            this.serverPut(`/api/letters/${id}`, { read: true });
         }
     }
 
@@ -288,6 +284,7 @@ class DataStorage {
         if (idx >= 0) {
             letters[idx].favorite = !letters[idx].favorite;
             this.set('letters', letters);
+            this.serverPut(`/api/letters/${id}`, { favorite: letters[idx].favorite });
         }
     }
 
@@ -298,8 +295,7 @@ class DataStorage {
             if (!letters[idx].reactions) letters[idx].reactions = [];
             letters[idx].reactions.push({ emoji, from, date: new Date().toISOString() });
             this.set('letters', letters);
-            const stats = this.getStats();
-            this.updateStats({ reactionsGiven: (stats.reactionsGiven || 0) + 1 });
+            this.serverPost(`/api/letters/${letterId}/reaction`, { emoji, from });
         }
     }
 
@@ -308,24 +304,17 @@ class DataStorage {
         const idx = letters.findIndex(l => l.id === letterId);
         if (idx >= 0) {
             if (!letters[idx].replies) letters[idx].replies = [];
-            // Миграция: старый формат reply -> replies
-            if (letters[idx].reply && typeof letters[idx].reply === 'object') {
-                letters[idx].replies.push(letters[idx].reply);
-                delete letters[idx].reply;
-            }
             letters[idx].replies.push(reply);
             this.set('letters', letters);
+            this.serverPost(`/api/letters/${letterId}/reply`, reply);
         }
     }
 
-    // Оставить для обратной совместимости
-    addReply(letterId, reply) {
-        this.addReplyToThread(letterId, reply);
-    }
+    addReply(letterId, reply) { this.addReplyToThread(letterId, reply); }
 
     deleteLetter(id) {
-        const letters = (this.get('letters') || []).filter(l => l.id !== id);
-        this.set('letters', letters);
+        this.set('letters', (this.get('letters') || []).filter(l => l.id !== id));
+        this.serverDelete(`/api/letters/${id}`);
     }
 
     // ========== EVENTS ==========
@@ -336,8 +325,7 @@ class DataStorage {
         const events = this.get('events') || [];
         events.push(event);
         this.set('events', events);
-        const stats = this.getStats();
-        this.updateStats({ eventsMade: (stats.eventsMade || 0) + 1 });
+        this.serverPost('/api/events', event);
     }
 
     updateEvent(event) {
@@ -346,12 +334,13 @@ class DataStorage {
         if (idx >= 0) {
             events[idx] = event;
             this.set('events', events);
+            this.serverPut(`/api/events/${event.id}`, event);
         }
     }
 
     deleteEvent(id) {
-        const events = (this.get('events') || []).filter(e => e.id !== id);
-        this.set('events', events);
+        this.set('events', (this.get('events') || []).filter(e => e.id !== id));
+        this.serverDelete(`/api/events/${id}`);
     }
 
     // ========== SPECIAL DATES ==========
@@ -361,26 +350,23 @@ class DataStorage {
         const dates = this.get('specialDates') || [];
         dates.push(date);
         this.set('specialDates', dates);
+        this.serverPost('/api/special-dates', date);
     }
 
     removeSpecialDate(id) {
-        const dates = (this.get('specialDates') || []).filter(d => d.id !== id);
-        this.set('specialDates', dates);
+        this.set('specialDates', (this.get('specialDates') || []).filter(d => d.id !== id));
+        this.serverDelete(`/api/special-dates/${id}`);
     }
 
     // ========== GIFTS ==========
-    getGifts() {
-        return (this.get('gifts') || []).sort((a, b) => new Date(b.date) - new Date(a.date));
-    }
-
+    getGifts() { return (this.get('gifts') || []).sort((a, b) => new Date(b.date) - new Date(a.date)); }
     getGift(id) { return (this.get('gifts') || []).find(g => g.id === id); }
 
     addGift(gift) {
         const gifts = this.get('gifts') || [];
-        gifts.push(gift);
+        gifts.unshift(gift);
         this.set('gifts', gifts);
-        const stats = this.getStats();
-        this.updateStats({ giftsReceived: (stats.giftsReceived || 0) + 1 });
+        this.serverPost('/api/gifts', gift);
     }
 
     markGiftOpened(id) {
@@ -389,23 +375,14 @@ class DataStorage {
         if (idx >= 0) {
             gifts[idx].opened = true;
             this.set('gifts', gifts);
+            this.serverPut(`/api/gifts/${id}`, { opened: true });
         }
     }
 
-    // ========== PHOTOS ==========
-    getPhotos() {
-        return (this.get('photos') || []).sort((a, b) => new Date(b.date) - new Date(a.date));
-    }
+    // ========== PHOTOS & ALBUMS ==========
+    getPhotos() { return (this.get('photos') || []).sort((a, b) => new Date(b.date) - new Date(a.date)); }
     getPhoto(id) { return (this.get('photos') || []).find(p => p.id === id); }
     getPhotosByAlbum(albumId) { return this.getPhotos().filter(p => p.albumId === albumId); }
-
-    addPhoto(photo) {
-        const photos = this.get('photos') || [];
-        photos.push(photo);
-        this.set('photos', photos);
-    }
-
-    // ========== ALBUMS ==========
     getAlbums() { return this.get('albums') || []; }
     getAlbum(id) { return this.getAlbums().find(a => a.id === id); }
 
@@ -413,6 +390,17 @@ class DataStorage {
         const albums = this.get('albums') || [];
         albums.push(album);
         this.set('albums', albums);
+        this.serverPost('/api/albums', album);
+    }
+
+    addPhoto(photo) {
+        const photos = this.get('photos') || [];
+        photos.push(photo);
+        this.set('photos', photos);
+        
+        // Без файлов на сервер (слишком большие)
+        const serverPhoto = { ...photo, files: [] };
+        this.serverPost('/api/photos', serverPhoto);
     }
 
     incrementAlbumCount(albumId) {
@@ -424,16 +412,19 @@ class DataStorage {
         }
     }
 
-    // ========== NOTIFICATIONS ==========
-    getNotifications() {
-        return (this.get('notifications') || []).sort((a, b) => new Date(b.date) - new Date(a.date));
+    deleteAlbum(id) {
+        this.set('albums', (this.get('albums') || []).filter(a => a.id !== id));
+        this.set('photos', (this.get('photos') || []).filter(p => p.albumId !== id));
+        this.serverDelete(`/api/albums/${id}`);
     }
+
+    // ========== NOTIFICATIONS ==========
+    getNotifications() { return (this.get('notifications') || []).sort((a, b) => new Date(b.date) - new Date(a.date)); }
 
     addNotification(notif) {
         const notifs = this.get('notifications') || [];
-        notifs.push(notif);
-        // Ограничить 50 уведомлениями
-        if (notifs.length > 50) notifs.splice(0, notifs.length - 50);
+        notifs.unshift(notif);
+        if (notifs.length > 50) notifs.length = 50;
         this.set('notifications', notifs);
     }
 
@@ -443,6 +434,7 @@ class DataStorage {
         if (idx >= 0) {
             notifs[idx].read = true;
             this.set('notifications', notifs);
+            this.serverPut(`/api/notifications/${id}/read`, {});
         }
     }
 
@@ -450,6 +442,7 @@ class DataStorage {
         const notifs = this.get('notifications') || [];
         notifs.forEach(n => n.read = true);
         this.set('notifications', notifs);
+        this.serverPut('/api/notifications/read-all', {});
     }
 
     getUnreadNotificationsCount() {
@@ -457,14 +450,13 @@ class DataStorage {
     }
 
     // ========== ORDERS ==========
-    getOrders() {
-        return (this.get('orders') || []).sort((a, b) => new Date(b.date) - new Date(a.date));
-    }
+    getOrders() { return (this.get('orders') || []).sort((a, b) => new Date(b.date) - new Date(a.date)); }
 
     addOrder(order) {
         const orders = this.get('orders') || [];
         orders.push(order);
         this.set('orders', orders);
+        this.serverPost('/api/orders', order);
     }
 
     updateOrderStatus(orderId, status) {
@@ -473,6 +465,7 @@ class DataStorage {
         if (idx >= 0) {
             orders[idx].status = status;
             this.set('orders', orders);
+            this.serverPut(`/api/orders/${orderId}`, { status });
         }
     }
 
@@ -482,11 +475,8 @@ class DataStorage {
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (key.startsWith(this.prefix)) {
-                try {
-                    data[key.replace(this.prefix, '')] = JSON.parse(localStorage.getItem(key));
-                } catch (e) {
-                    data[key.replace(this.prefix, '')] = localStorage.getItem(key);
-                }
+                try { data[key.replace(this.prefix, '')] = JSON.parse(localStorage.getItem(key)); }
+                catch (e) { data[key.replace(this.prefix, '')] = localStorage.getItem(key); }
             }
         }
         return data;
@@ -499,6 +489,7 @@ class DataStorage {
             if (key.startsWith(this.prefix)) keys.push(key);
         }
         keys.forEach(k => localStorage.removeItem(k));
+        this.serverPost('/api/reset', {});
     }
 }
 

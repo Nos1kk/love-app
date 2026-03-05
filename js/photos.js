@@ -1,546 +1,235 @@
-// js/photos.js — Фотоальбомы: загрузка фото и видео
+// js/photos.js — Менеджер фотоальбомов
 
 class PhotosManager {
     constructor(storage, isAdmin = false) {
         this.storage = storage;
         this.isAdmin = isAdmin;
-        this._selectedFiles = [];
-        this._selectedPhotoEmoji = '📷';
     }
 
-    renderPhotosSection() {
-        const albums = this.storage.getAlbums();
-        const allPhotos = this.storage.getPhotos();
-
-        return `
-            <div class="photos-page">
-                <div class="photos-header-bar">
-                    <h2>📸 Наши моменты</h2>
-                    ${this.isAdmin ? `
-                        <button class="photos-add-btn" onclick="app.photos.openUpload()">
-                            + Добавить
-                        </button>
-                    ` : ''}
-                </div>
-
-                <!-- Альбомы -->
-                <div class="section-title">
-                    <h2>📁 Альбомы</h2>
-                    ${this.isAdmin ? '<span class="see-all" onclick="app.photos.createAlbum()">+ Создать</span>' : ''}
-                </div>
-                
-                <div class="albums-scroll">
-                    ${albums.length === 0 
-                        ? '<div class="empty-state small"><p>Нет альбомов</p></div>'
-                        : albums.map(a => this.renderAlbumCard(a)).join('')
-                    }
-                </div>
-
-                <!-- Все фото -->
-                <div class="section-title">
-                    <h2>🖼️ Все медиа (${allPhotos.length})</h2>
-                </div>
-                
-                <div class="photos-grid-masonry" id="photosGrid">
-                    ${allPhotos.length === 0 
-                        ? this.renderEmptyPhotos()
-                        : allPhotos.map(p => this.renderPhotoItem(p)).join('')
-                    }
-                </div>
-            </div>
-        `;
-    }
-
-    renderEmptyPhotos() {
-        return `
-            <div class="empty-state">
-                <div class="empty-emoji">📸</div>
-                <h3>Пока нет фотографий</h3>
-                <p>${this.isAdmin 
-                    ? 'Добавьте первое фото или видео!' 
-                    : 'Скоро здесь появятся ваши моменты...'}</p>
-            </div>
-        `;
-    }
-
-    renderAlbumCard(album) {
-        return `
-            <div class="album-card" onclick="app.photos.openAlbum('${album.id}')">
-                <div class="album-cover">${album.coverEmoji || '📷'}</div>
-                <div class="album-info">
-                    <span class="album-name">${album.name}</span>
-                    <span class="album-count">${album.photoCount || 0} медиа</span>
-                </div>
-            </div>
-        `;
-    }
-
-    renderPhotoItem(photo) {
-        const isVideo = photo.mediaType === 'video';
-        
-        return `
-            <div class="photo-grid-item ${isVideo ? 'video-item' : ''}" 
-                 onclick="app.photos.viewPhoto('${photo.id}')">
-                ${photo.files && photo.files[0] 
-                    ? (isVideo 
-                        ? `<video src="${photo.files[0].data}" class="photo-thumb-media"></video>
-                           <div class="video-play-badge">▶️</div>`
-                        : `<img src="${photo.files[0].data}" class="photo-thumb-media" alt="">`)
-                    : `<div class="photo-thumb-emoji">${photo.emoji || '📷'}</div>`
-                }
-                <div class="photo-caption-overlay">${photo.caption || ''}</div>
-                ${photo.isNew ? '<div class="photo-new-badge">✨</div>' : ''}
-                ${isVideo ? '<div class="media-type-badge">🎬</div>' : ''}
-            </div>
-        `;
-    }
-
-    // ========== ЗАГРУЗКА ФОТО И ВИДЕО ==========
-    openUpload(albumId = null) {
-        const albums = this.storage.getAlbums();
-        this._selectedFiles = [];
-        this._uploadAlbumId = albumId;
-
-        const html = `
-            <div class="admin-modal-overlay active" id="photoUploadOverlay">
-                <div class="admin-modal large">
-                    <div class="admin-modal-header">
-                        <button class="admin-modal-close" onclick="app.photos.closeUpload()">✕</button>
-                        <h2>📸 Добавить медиа</h2>
-                    </div>
-
-                    <div class="admin-modal-body">
-                        <!-- Зона загрузки -->
-                        <div class="upload-area-new" id="uploadArea" 
-                             onclick="document.getElementById('mediaFileInput').click()"
-                             ondragover="event.preventDefault(); this.classList.add('dragover')"
-                             ondragleave="this.classList.remove('dragover')"
-                             ondrop="event.preventDefault(); this.classList.remove('dragover'); app.photos.handleDrop(event)">
-                            <div class="upload-icon-big">📸🎬</div>
-                            <p class="upload-text-main">Нажмите или перетащите</p>
-                            <p class="upload-text-sub">Фото и видео (до 100MB)</p>
-                            <input type="file" id="mediaFileInput" 
-                                   accept="image/*,video/*" multiple 
-                                   style="display:none" 
-                                   onchange="app.photos.handleFileSelect(event)">
-                        </div>
-
-                        <!-- Превью файлов -->
-                        <div class="upload-preview-grid" id="uploadPreview"></div>
-
-                        <!-- Опции -->
-                        <div class="admin-field">
-                            <label>📝 Подпись</label>
-                            <input type="text" class="admin-input" id="photoCaption" 
-                                   placeholder="Описание момента...">
-                        </div>
-
-                        <div class="admin-field">
-                            <label>📁 Альбом</label>
-                            <select class="admin-select" id="photoAlbum">
-                                <option value="">Без альбома</option>
-                                ${albums.map(a => `
-                                    <option value="${a.id}" 
-                                            ${albumId === a.id ? 'selected' : ''}>
-                                        ${a.name}
-                                    </option>
-                                `).join('')}
-                            </select>
-                        </div>
-
-                        <div class="admin-field">
-                            <label>😊 Эмодзи</label>
-                            <div class="emoji-picker-mini">
-                                ${['📷', '🥰', '💑', '🌅', '🎂', '✈️', '🎄', '🌸', '🎉', '🏖️', '🌙', '🎬'].map(e => `
-                                    <button class="emoji-pick-btn ${e === '📷' ? 'active' : ''}" 
-                                            onclick="app.photos.selectPhotoEmoji('${e}', this)">
-                                        ${e}
-                                    </button>
-                                `).join('')}
-                            </div>
-                        </div>
-
-                        <div class="upload-file-count" id="uploadFileCount"></div>
-
-                        <button class="admin-submit-btn" onclick="app.photos.saveMedia()" 
-                                id="uploadSubmitBtn" disabled>
-                            ✨ Добавить медиа
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.insertAdjacentHTML('beforeend', html);
-    }
-
-    handleDrop(event) {
-        const files = event.dataTransfer.files;
-        this.processFiles(files);
-    }
-
-    handleFileSelect(event) {
-        const files = event.target.files;
-        this.processFiles(files);
-    }
-
-    processFiles(files) {
-        if (!files || !files.length) return;
-
-        const preview = document.getElementById('uploadPreview');
-        const countEl = document.getElementById('uploadFileCount');
-        const submitBtn = document.getElementById('uploadSubmitBtn');
-        
-        Array.from(files).forEach(file => {
-            // Проверка размера (100MB для видео, 10MB для фото)
-            const maxSize = file.type.startsWith('video/') ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
-            
-            if (file.size > maxSize) {
-                window.app?.toast?.show(`${file.name} слишком большой! ❌`);
-                return;
-            }
-
-            const isVideo = file.type.startsWith('video/');
-            const fileId = 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-
-            // Для больших файлов используем URL.createObjectURL вместо base64
-            const objectUrl = URL.createObjectURL(file);
-            
-            this._selectedFiles.push({
-                id: fileId,
-                name: file.name,
-                type: isVideo ? 'video' : 'image',
-                size: file.size,
-                data: objectUrl,
-                file: file  // Сохраняем ссылку на файл
-            });
-
-            // Превью
-            if (preview) {
-                preview.insertAdjacentHTML('beforeend', `
-                    <div class="upload-preview-item" id="preview_${fileId}">
-                        ${isVideo 
-                            ? `<video src="${objectUrl}" class="preview-media"></video>
-                               <div class="preview-video-badge">🎬</div>`
-                            : `<img src="${objectUrl}" class="preview-media" alt="">`
-                        }
-                        <div class="preview-name">${file.name}</div>
-                        <div class="preview-size">${this.formatFileSize(file.size)}</div>
-                        <button class="preview-remove" 
-                                onclick="app.photos.removeFile('${fileId}')">✕</button>
-                    </div>
-                `);
-            }
-        });
-
-        // Обновить счётчик
-        if (countEl) {
-            countEl.textContent = `Выбрано: ${this._selectedFiles.length} файл(ов)`;
-        }
-        if (submitBtn) {
-            submitBtn.disabled = this._selectedFiles.length === 0;
-        }
-    }
-
-    removeFile(fileId) {
-        this._selectedFiles = this._selectedFiles.filter(f => f.id !== fileId);
-        document.getElementById('preview_' + fileId)?.remove();
-        
-        const countEl = document.getElementById('uploadFileCount');
-        const submitBtn = document.getElementById('uploadSubmitBtn');
-        if (countEl) countEl.textContent = `Выбрано: ${this._selectedFiles.length} файл(ов)`;
-        if (submitBtn) submitBtn.disabled = this._selectedFiles.length === 0;
-    }
-
-    selectPhotoEmoji(emoji, btn) {
-        document.querySelectorAll('.emoji-pick-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this._selectedPhotoEmoji = emoji;
-    }
-
-    async saveMedia() {
-        const caption = document.getElementById('photoCaption')?.value?.trim() || '';
-        const albumId = document.getElementById('photoAlbum')?.value || '';
-
-        if (this._selectedFiles.length === 0) {
-            window.app?.toast?.show('Добавьте хотя бы один файл! 📁');
-            return;
-        }
-
-        // Сохранить каждый файл как отдельное медиа
-        const savedFiles = [];
-        
-        for (const file of this._selectedFiles) {
-        let fileData;
-
-        if (file.file) {
-            // Предупреждение для больших файлов
-            if (file.file.size > 5 * 1024 * 1024) {
-                window.app?.toast?.show('⚠️ Большие файлы могут не сохраниться');
-            }
-
-            try {
-                fileData = await this.fileToBase64(file.file);
-            } catch (e) {
-                console.error('File too large for localStorage:', e);
-                window.app?.toast?.show(`${file.name} слишком большой для хранения`);
-                continue;
-            }
-        }
-
-        savedFiles.push({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            data: fileData || file.data
-        });
-    }
-
-        const hasVideo = this._selectedFiles.some(f => f.type === 'video');
-
-        const photo = {
-            id: 'media_' + Date.now(),
-            emoji: this._selectedPhotoEmoji || '📷',
-            caption,
-            albumId,
-            mediaType: hasVideo ? 'video' : 'image',
-            date: new Date().toISOString(),
-            isNew: true,
-            files: savedFiles
-        };
-
-        this.storage.addPhoto(photo);
-
-        if (albumId) {
-            this.storage.incrementAlbumCount(albumId);
-        }
-
-        this.closeUpload();
-        window.app?.toast?.show(`${savedFiles.length} медиа добавлено! 📸✨`);
-        window.app?.effects?.launchConfetti(30);
-        
-        if (window.app) window.app.navigateTo('gallery');
-    }
-
-    fileToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
-    formatFileSize(bytes) {
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    }
-
-    closeUpload() {
-        // Очистить Object URLs
-        this._selectedFiles.forEach(f => {
-            if (f.data?.startsWith('blob:')) {
-                URL.revokeObjectURL(f.data);
-            }
-        });
-        this._selectedFiles = [];
-        document.getElementById('photoUploadOverlay')?.remove();
-    }
-
-    // ========== СОЗДАТЬ АЛЬБОМ ==========
+    // ========== СОЗДАНИЕ АЛЬБОМА ==========
     createAlbum() {
+        document.getElementById('createAlbumOverlay')?.remove();
+
+        const emojis = ['📸', '💑', '✈️', '🌅', '🎂', '🎉', '🏖️', '🌸', '🎄', '🌙', '🎵', '💕'];
+
         const html = `
             <div class="admin-modal-overlay active" id="createAlbumOverlay">
                 <div class="admin-modal small">
                     <div class="admin-modal-header">
-                        <button class="admin-modal-close" 
-                                onclick="document.getElementById('createAlbumOverlay').remove()">✕</button>
-                        <h2>📁 Новый альбом</h2>
+                        <button class="admin-modal-close" onclick="document.getElementById('createAlbumOverlay').remove()">✕</button>
+                        <h2>📸 Новый альбом</h2>
                     </div>
                     <div class="admin-modal-body">
                         <div class="admin-field">
                             <label>Название</label>
-                            <input type="text" class="admin-input" id="albumName" 
-                                   placeholder="Наше лето 2024">
+                            <input type="text" class="admin-input" id="albumNameInput" placeholder="Наши моменты..." maxlength="30">
                         </div>
                         <div class="admin-field">
                             <label>Обложка</label>
-                            <div class="emoji-picker-mini">
-                                ${['📸', '💑', '🌅', '✈️', '🎄', '🎂', '🌸', '🏖️'].map(e => `
-                                    <button class="emoji-pick-btn" 
-                                            onclick="app.photos._albumEmoji='${e}'; 
-                                            document.querySelectorAll('#createAlbumOverlay .emoji-pick-btn')
-                                                .forEach(b=>b.classList.remove('active')); 
-                                            this.classList.add('active')">
-                                        ${e}
-                                    </button>
+                            <div class="emoji-grid-avatar">
+                                ${emojis.map((e, i) => `
+                                    <button class="emoji-avatar-btn ${i === 0 ? 'active' : ''}" 
+                                            onclick="app.photos.selectAlbumEmoji('${e}', this)">${e}</button>
                                 `).join('')}
                             </div>
                         </div>
-                        
-                        <!-- Загрузка фото при создании -->
-                        <div class="admin-field">
-                            <label>📷 Добавить фото сразу (необязательно)</label>
-                            <div class="mini-upload-area" 
-                                 onclick="document.getElementById('albumFilesInput').click()">
-                                <span>📷🎬 Выбрать файлы</span>
-                                <input type="file" id="albumFilesInput" accept="image/*,video/*" 
-                                       multiple style="display:none"
-                                       onchange="app.photos.handleAlbumFiles(event)">
-                            </div>
-                            <div class="album-files-preview" id="albumFilesPreview"></div>
-                        </div>
-                        
-                        <button class="admin-submit-btn" onclick="app.photos.saveAlbum()">
-                            ✨ Создать альбом
-                        </button>
+                        <button class="admin-submit-btn" onclick="app.photos.saveAlbum()">✨ Создать</button>
                     </div>
                 </div>
             </div>
         `;
         document.body.insertAdjacentHTML('beforeend', html);
-        this._albumEmoji = '📸';
-        this._albumFiles = [];
+        this._selectedAlbumEmoji = '📸';
     }
 
-    handleAlbumFiles(event) {
-        const files = event.target.files;
-        const preview = document.getElementById('albumFilesPreview');
-        
-        this._albumFiles = [];
-
-        Array.from(files).forEach(file => {
-            const objectUrl = URL.createObjectURL(file);
-            const isVideo = file.type.startsWith('video/');
-            
-            this._albumFiles.push({
-                name: file.name,
-                type: isVideo ? 'video' : 'image',
-                size: file.size,
-                data: objectUrl,
-                file: file
-            });
-        });
-
-        if (preview) {
-            preview.innerHTML = `<div class="album-files-count">${this._albumFiles.length} файл(ов) выбрано</div>`;
-        }
+    selectAlbumEmoji(emoji, btn) {
+        document.querySelectorAll('#createAlbumOverlay .emoji-avatar-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this._selectedAlbumEmoji = emoji;
     }
 
-    async saveAlbum() {
-        const name = document.getElementById('albumName')?.value?.trim();
+    saveAlbum() {
+        const name = document.getElementById('albumNameInput')?.value?.trim();
         if (!name) {
-            window.app?.toast?.show('Введите название! 📝');
+            window.app?.showToast('Введите название! 📸');
             return;
         }
 
-        const albumId = 'album_' + Date.now();
-
         this.storage.addAlbum({
-            id: albumId,
+            id: 'album_' + Date.now(),
             name,
-            coverEmoji: this._albumEmoji || '📸',
-            photoCount: this._albumFiles?.length || 0,
+            coverEmoji: this._selectedAlbumEmoji || '📸',
+            photoCount: 0,
             createdAt: new Date().toISOString()
         });
 
-        // Сохранить файлы как фото в альбом
-        if (this._albumFiles && this._albumFiles.length > 0) {
-            for (const file of this._albumFiles) {
-                let fileData = file.data;
-                
-                if (file.file && file.file.size < 5 * 1024 * 1024) {
-                    fileData = await this.fileToBase64(file.file);
-                }
-
-                this.storage.addPhoto({
-                    id: 'media_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-                    emoji: this._albumEmoji || '📷',
-                    caption: '',
-                    albumId,
-                    mediaType: file.type,
-                    date: new Date().toISOString(),
-                    isNew: true,
-                    files: [{ name: file.name, type: file.type, data: fileData }]
-                });
-            }
-        }
-
         document.getElementById('createAlbumOverlay')?.remove();
-        window.app?.toast?.show('Альбом создан! 📁✨');
-        
-        if (window.app) window.app.navigateTo('gallery');
+        window.app?.showToast('Альбом создан! 📸');
+        if (window.app?.currentPage === 'gallery') {
+            window.app.renderGalleryContent();
+        }
     }
 
-    // ========== ПРОСМОТР ==========
+    // ========== ОТКРЫТЬ АЛЬБОМ ==========
     openAlbum(albumId) {
         const album = this.storage.getAlbum(albumId);
+        if (!album) return;
+
         const photos = this.storage.getPhotosByAlbum(albumId);
 
+        document.getElementById('albumViewOverlay')?.remove();
+
         const html = `
-            <div class="album-view-overlay active" id="albumViewOverlay">
-                <div class="album-view">
-                    <div class="album-view-header">
-                        <button class="album-back" 
-                                onclick="document.getElementById('albumViewOverlay').remove()">
-                            ← Назад
-                        </button>
-                        <h2>${album?.coverEmoji || '📸'} ${album?.name || 'Альбом'}</h2>
-                        ${this.isAdmin ? `
-                            <button class="album-add-photo-btn" 
-                                    onclick="app.photos.openUpload('${albumId}')">
-                                + Добавить
-                            </button>
-                        ` : ''}
+            <div class="admin-modal-overlay active" id="albumViewOverlay">
+                <div class="admin-modal large">
+                    <div class="admin-modal-header">
+                        <button class="admin-modal-close" onclick="document.getElementById('albumViewOverlay').remove()">✕</button>
+                        <h2>${album.coverEmoji} ${album.name}</h2>
+                        ${this.isAdmin ? `<button class="admin-modal-close" style="right:50px;background:var(--gradient-button);color:white;" onclick="app.photos.addPhoto('${albumId}')">+</button>` : ''}
                     </div>
-                    <div class="album-photos-grid">
-                        ${photos.length === 0 
-                            ? '<div class="empty-state small"><p>В альбоме пока нет медиа</p></div>'
-                            : photos.map(p => this.renderPhotoItem(p)).join('')
-                        }
+                    <div class="admin-modal-body">
+                        <div class="photos-grid" id="photosGrid">
+                            ${photos.length === 0
+                                ? '<div class="admin-empty"><span>📸</span>Пока нет фото</div>'
+                                : photos.map(p => this.renderPhotoItem(p)).join('')
+                            }
+                        </div>
                     </div>
                 </div>
             </div>
         `;
-
         document.body.insertAdjacentHTML('beforeend', html);
     }
 
+    renderPhotoItem(photo) {
+        const hasFile = photo.files && photo.files.length > 0 && photo.files[0].data;
+        return `
+            <div class="photo-card" onclick="app.photos.viewPhoto('${photo.id}')">
+                ${hasFile
+                    ? `<img src="${photo.files[0].data}" alt="${photo.caption || ''}" class="photo-card-img">`
+                    : `<div class="photo-card-emoji">${photo.emoji || '📸'}</div>`
+                }
+                <div class="photo-card-caption">${photo.caption || ''}</div>
+                ${photo.isNew ? '<div class="photo-new-badge">NEW</div>' : ''}
+            </div>
+        `;
+    }
+
+    // ========== ДОБАВЛЕНИЕ ФОТО ==========
+    addPhoto(albumId) {
+        document.getElementById('addPhotoOverlay')?.remove();
+
+        const html = `
+            <div class="admin-modal-overlay active" id="addPhotoOverlay">
+                <div class="admin-modal small">
+                    <div class="admin-modal-header">
+                        <button class="admin-modal-close" onclick="document.getElementById('addPhotoOverlay').remove()">✕</button>
+                        <h2>📸 Добавить фото</h2>
+                    </div>
+                    <div class="admin-modal-body">
+                        <div class="admin-field">
+                            <label>Подпись</label>
+                            <input type="text" class="admin-input" id="photoCaptionInput" placeholder="Описание момента...">
+                        </div>
+                        <div class="admin-field">
+                            <label>Фото</label>
+                            <div class="photo-upload-area" onclick="document.getElementById('photoFileInput').click()">
+                                <span>📷</span>
+                                <p>Нажмите для загрузки</p>
+                                <div class="photo-upload-preview" id="photoUploadPreview"></div>
+                            </div>
+                            <input type="file" id="photoFileInput" accept="image/*" style="display:none" onchange="app.photos.handlePhotoUpload(event)">
+                        </div>
+                        <div class="admin-field">
+                            <label>Или выберите эмодзи</label>
+                            <div class="emoji-grid-avatar">
+                                ${['📸', '💑', '🌅', '🎂', '🏖️', '🌸', '🎄', '🌙'].map(e => `
+                                    <button class="emoji-avatar-btn" onclick="app.photos.selectPhotoEmoji('${e}', this)">${e}</button>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <button class="admin-submit-btn" onclick="app.photos.savePhoto('${albumId}')">💾 Сохранить</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', html);
+        this._selectedPhotoEmoji = '📸';
+        this._photoFileData = null;
+    }
+
+    selectPhotoEmoji(emoji, btn) {
+        document.querySelectorAll('#addPhotoOverlay .emoji-avatar-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this._selectedPhotoEmoji = emoji;
+    }
+
+    handlePhotoUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (file.size > 3 * 1024 * 1024) {
+            window.app?.showToast('Максимум 3MB! 📁');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            this._photoFileData = e.target.result;
+            const preview = document.getElementById('photoUploadPreview');
+            if (preview) {
+                preview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+                preview.style.display = 'block';
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+
+    savePhoto(albumId) {
+        const caption = document.getElementById('photoCaptionInput')?.value?.trim() || '';
+
+        const photo = {
+            id: 'photo_' + Date.now(),
+            emoji: this._selectedPhotoEmoji || '📸',
+            caption,
+            albumId,
+            date: new Date().toISOString(),
+            isNew: true,
+            files: this._photoFileData ? [{ data: this._photoFileData }] : []
+        };
+
+        this.storage.addPhoto(photo);
+        this.storage.incrementAlbumCount(albumId);
+
+        document.getElementById('addPhotoOverlay')?.remove();
+        window.app?.showToast('Фото добавлено! 📸');
+
+        // Обновить вид альбома
+        this.openAlbum(albumId);
+    }
+
+    // ========== ПРОСМОТР ФОТО ==========
     viewPhoto(photoId) {
         const photo = this.storage.getPhoto(photoId);
         if (!photo) return;
 
-        const isVideo = photo.mediaType === 'video';
-        const hasFile = photo.files && photo.files[0];
+        const hasFile = photo.files && photo.files.length > 0 && photo.files[0].data;
+
+        document.getElementById('photoViewOverlay')?.remove();
 
         const html = `
-            <div class="photo-viewer-overlay active" id="photoViewerOverlay" 
-                 onclick="if(event.target===this) this.remove()">
-                <div class="photo-viewer">
-                    <button class="photo-viewer-close" 
-                            onclick="document.getElementById('photoViewerOverlay').remove()">✕</button>
-                    <div class="photo-viewer-content">
-                        ${hasFile 
-                            ? (isVideo 
-                                ? `<video src="${photo.files[0].data}" controls 
-                                         class="viewer-media" autoplay></video>`
-                                : `<img src="${photo.files[0].data}" class="viewer-media" alt="">`)
-                            : `<div class="photo-viewer-emoji">${photo.emoji}</div>`
-                        }
-                    </div>
-                    <div class="photo-viewer-info">
-                        <p class="photo-viewer-caption">${photo.caption || ''}</p>
-                        <p class="photo-viewer-date">
-                            ${new Date(photo.date).toLocaleDateString('ru-RU', { 
-                                day: 'numeric', month: 'long', year: 'numeric' 
-                            })}
-                        </p>
-                    </div>
+            <div class="photo-view-overlay active" id="photoViewOverlay" onclick="if(event.target===this) this.remove()">
+                <div class="photo-view-content">
+                    <button class="photo-view-close" onclick="document.getElementById('photoViewOverlay').remove()">✕</button>
+                    ${hasFile
+                        ? `<img src="${photo.files[0].data}" alt="${photo.caption || ''}" class="photo-view-img">`
+                        : `<div class="photo-view-emoji">${photo.emoji || '📸'}</div>`
+                    }
+                    ${photo.caption ? `<div class="photo-view-caption">${photo.caption}</div>` : ''}
+                    <div class="photo-view-date">${new Date(photo.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
                 </div>
             </div>
         `;
-
         document.body.insertAdjacentHTML('beforeend', html);
     }
 }

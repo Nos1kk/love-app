@@ -58,6 +58,9 @@ const sharedStore = {
     _lastUpdate: Date.now()
 };
 
+// Список chatId для уведомлений (сохраняем в памяти)
+let botChatIds = new Set();
+
 function getNextDateStr(daysFromNow) {
     const d = new Date();
     d.setDate(d.getDate() + daysFromNow);
@@ -433,9 +436,7 @@ app.put('/api/orders/:id', (req, res) => {
 });
 
 // ===== GOALS =====
-app.get('/api/goals', (req, res) => {
-    res.json(sharedStore.goals);
-});
+app.get('/api/goals', (req, res) => res.json(sharedStore.goals));
 
 app.post('/api/goals', (req, res) => {
     const goal = req.body;
@@ -461,9 +462,7 @@ app.delete('/api/goals/:id', (req, res) => {
 });
 
 // ===== QUICK NOTES =====
-app.get('/api/notes', (req, res) => {
-    res.json(sharedStore.quickNotes);
-});
+app.get('/api/notes', (req, res) => res.json(sharedStore.quickNotes));
 
 app.post('/api/notes', (req, res) => {
     const note = req.body;
@@ -506,145 +505,119 @@ app.post('/api/reset', (req, res) => {
 
 // ===== HEALTH =====
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', uptime: process.uptime(), version: sharedStore._version, botActive: !!bot });
+    res.json({ 
+        status: 'ok', 
+        uptime: process.uptime(), 
+        version: sharedStore._version, 
+        botActive: !!bot,
+        subscribers: botChatIds.size 
+    });
 });
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// ========== START SERVER ==========
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-});
-
-// ========== BOT (с защитой от ошибок) ==========
+// ========== BOT (WEBHOOK MODE) ==========
 let bot = null;
-let botChatIds = new Set();
 
 function sendBotNotification(message) {
-    if (!bot) return;
+    if (!bot || botChatIds.size === 0) return;
     botChatIds.forEach(chatId => {
         bot.sendMessage(chatId, message).catch(err => {
             console.log(`Failed to send to ${chatId}:`, err.message);
+            // Удаляем невалидные chatId
+            if (err.message.includes('chat not found') || err.message.includes('bot was blocked')) {
+                botChatIds.delete(chatId);
+            }
         });
     });
 }
 
-// Инициализация бота только если токен указан
-if (BOT_TOKEN && BOT_TOKEN !== 'YOUR_TOKEN' && BOT_TOKEN.length > 20) {
-    try {
-        bot = new TelegramBot(BOT_TOKEN, { 
-            polling: {
-                interval: 1000,
-                autoStart: true,
-                params: { timeout: 10 }
+function handleBotMessage(msg) {
+    const chatId = msg.chat.id;
+    const text = msg.text || '';
+    
+    // Сохраняем chatId для уведомлений
+    botChatIds.add(chatId);
+    
+    const name = msg.from?.first_name || 'Любимая';
+    
+    if (text.startsWith('/start')) {
+        bot.sendMessage(chatId,
+            `💕 Привет, ${name}!\n\nДобро пожаловать в Love App!\nЗдесь тебя ждут письма, подарки и сюрпризы ✨`,
+            {
+                reply_markup: {
+                    inline_keyboard: [[
+                        { text: '💕 Открыть приложение', web_app: { url: WEBAPP_URL } }
+                    ]]
+                }
             }
+        ).catch(console.error);
+    } else if (text.startsWith('/menu')) {
+        bot.sendMessage(chatId, '📱 Главное меню:', {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '💕 Открыть', web_app: { url: WEBAPP_URL } }],
+                    [
+                        { text: '💌 Письма', web_app: { url: WEBAPP_URL + '#letters' } },
+                        { text: '🎁 Подарки', web_app: { url: WEBAPP_URL + '#gifts' } }
+                    ],
+                    [
+                        { text: '📅 Календарь', web_app: { url: WEBAPP_URL + '#calendar' } },
+                        { text: '👤 Профиль', web_app: { url: WEBAPP_URL + '#profile' } }
+                    ]
+                ]
+            }
+        }).catch(console.error);
+    } else if (text.startsWith('/love')) {
+        const compliments = [
+            'Ты освещаешь мой мир ярче тысячи звёзд ⭐',
+            'Каждый день с тобой — подарок судьбы 🎁',
+            'Ты самая красивая во вселенной 💫',
+            'Я влюбляюсь в тебя сильнее каждый день 💗',
+            'Ты делаешь мою жизнь волшебной ✨',
+            'Рядом с тобой я самый счастливый 🥰'
+        ];
+        const c = compliments[Math.floor(Math.random() * compliments.length)];
+        bot.sendMessage(chatId, `💕 ${c}`).catch(console.error);
+    } else if (text.startsWith('/days')) {
+        const days = sharedStore.stats.daysTogether || 0;
+        bot.sendMessage(chatId, 
+            `💑 Мы вместе ${days} дней!\n💕 С ${sharedStore.profile.coupleDate || '22 октября 2023'}`
+        ).catch(console.error);
+    } else if (text.startsWith('/stats')) {
+        const s = sharedStore.stats;
+        bot.sendMessage(chatId,
+            `📊 Статистика Love App:\n\n💑 Дней вместе: ${s.daysTogether}\n💌 Писем: ${s.lettersReceived}\n🎁 Подарков: ${s.giftsReceived}\n📅 Событий: ${s.eventsMade}\n😊 Реакций: ${s.reactionsGiven}`
+        ).catch(console.error);
+    } else if (text.startsWith('/help')) {
+        bot.sendMessage(chatId,
+            `📖 Команды:\n\n/start — Запустить бота\n/menu — Главное меню\n/love — Получить комплимент\n/days — Дней вместе\n/stats — Статистика\n/help — Справка`
+        ).catch(console.error);
+    }
+}
+
+// Инициализация бота
+if (BOT_TOKEN && BOT_TOKEN.length > 20) {
+    try {
+        // Создаём бота БЕЗ polling (будем использовать webhook)
+        bot = new TelegramBot(BOT_TOKEN);
+        
+        // Webhook endpoint
+        app.post(`/bot${BOT_TOKEN}`, (req, res) => {
+            try {
+                if (req.body.message) {
+                    handleBotMessage(req.body.message);
+                }
+            } catch (e) {
+                console.error('Webhook error:', e);
+            }
+            res.sendStatus(200);
         });
         
-        // Обработка ошибок polling
-        bot.on('polling_error', (err) => {
-            if (err.code === 'ETELEGRAM' && err.message.includes('409')) {
-                console.log('⚠️ Bot conflict: another instance running. Stopping polling...');
-                bot.stopPolling();
-            } else if (err.code === 'ETELEGRAM' && err.message.includes('404')) {
-                console.log('❌ Invalid bot token! Please check BOT_TOKEN environment variable.');
-                bot.stopPolling();
-                bot = null;
-            } else {
-                console.log('Bot polling error:', err.code, err.message);
-            }
-        });
-
-        bot.on('error', (err) => {
-            console.log('Bot error:', err.message);
-        });
-
-        bot.onText(/\/start/, (msg) => {
-            const chatId = msg.chat.id;
-            botChatIds.add(chatId);
-            const name = msg.from.first_name || 'Любимая';
-
-            bot.sendMessage(chatId,
-                `💕 Привет, ${name}!\n\nДобро пожаловать в Love App!\nЗдесь тебя ждут письма, подарки и сюрпризы ✨`,
-                {
-                    reply_markup: {
-                        inline_keyboard: [[
-                            { text: '💕 Открыть приложение', web_app: { url: WEBAPP_URL } }
-                        ]]
-                    }
-                }
-            ).catch(console.error);
-        });
-
-        bot.onText(/\/menu/, (msg) => {
-            botChatIds.add(msg.chat.id);
-            bot.sendMessage(msg.chat.id, '📱 Главное меню:', {
-                reply_markup: {
-                    inline_keyboard: [
-                        [{ text: '💕 Открыть', web_app: { url: WEBAPP_URL } }],
-                        [
-                            { text: '💌 Письма', web_app: { url: WEBAPP_URL + '#letters' } },
-                            { text: '🎁 Подарки', web_app: { url: WEBAPP_URL + '#gifts' } }
-                        ],
-                        [
-                            { text: '📅 Календарь', web_app: { url: WEBAPP_URL + '#calendar' } },
-                            { text: '👤 Профиль', web_app: { url: WEBAPP_URL + '#profile' } }
-                        ]
-                    ]
-                }
-            }).catch(console.error);
-        });
-
-        bot.onText(/\/love/, (msg) => {
-            botChatIds.add(msg.chat.id);
-            const compliments = [
-                'Ты освещаешь мой мир ярче тысячи звёзд ⭐',
-                'Каждый день с тобой — подарок судьбы 🎁',
-                'Ты самая красивая во вселенной 💫',
-                'Я влюбляюсь в тебя сильнее каждый день 💗',
-                'Ты делаешь мою жизнь волшебной ✨',
-                'Рядом с тобой я самый счастливый 🥰'
-            ];
-            const text = compliments[Math.floor(Math.random() * compliments.length)];
-            bot.sendMessage(msg.chat.id, `💕 ${text}`).catch(console.error);
-        });
-
-        bot.onText(/\/days/, (msg) => {
-            botChatIds.add(msg.chat.id);
-            const days = sharedStore.stats.daysTogether || 0;
-            bot.sendMessage(msg.chat.id, 
-                `💑 Мы вместе ${days} дней!\n💕 С ${sharedStore.profile.coupleDate || '22 октября 2023'}`
-            ).catch(console.error);
-        });
-
-        bot.onText(/\/stats/, (msg) => {
-            botChatIds.add(msg.chat.id);
-            const s = sharedStore.stats;
-            bot.sendMessage(msg.chat.id,
-                `📊 Статистика Love App:\n\n` +
-                `💑 Дней вместе: ${s.daysTogether}\n` +
-                `💌 Писем: ${s.lettersReceived}\n` +
-                `🎁 Подарков: ${s.giftsReceived}\n` +
-                `📅 Событий: ${s.eventsMade}\n` +
-                `😊 Реакций: ${s.reactionsGiven}`
-            ).catch(console.error);
-        });
-
-        bot.onText(/\/help/, (msg) => {
-            botChatIds.add(msg.chat.id);
-            bot.sendMessage(msg.chat.id,
-                `📖 Команды:\n\n` +
-                `/start — Запустить бота\n` +
-                `/menu — Главное меню\n` +
-                `/love — Получить комплимент\n` +
-                `/days — Дней вместе\n` +
-                `/stats — Статистика\n` +
-                `/help — Справка`
-            ).catch(console.error);
-        });
-
-        console.log('🤖 Bot initialized successfully!');
+        // Устанавливаем webhook после запуска сервера
+        console.log('🤖 Bot initialized (webhook mode)');
         
     } catch (e) {
         console.error('❌ Bot initialization failed:', e.message);
@@ -652,5 +625,34 @@ if (BOT_TOKEN && BOT_TOKEN !== 'YOUR_TOKEN' && BOT_TOKEN.length > 20) {
     }
 } else {
     console.log('⚠️ BOT_TOKEN not configured. Bot features disabled.');
-    console.log('   Set BOT_TOKEN environment variable to enable the bot.');
 }
+
+// ========== START SERVER ==========
+const server = app.listen(PORT, '0.0.0.0', async () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    
+    // Устанавливаем webhook для бота
+    if (bot && BOT_TOKEN) {
+        const webhookUrl = `${WEBAPP_URL}/bot${BOT_TOKEN}`;
+        try {
+            // Сначала удаляем старый webhook
+            await bot.deleteWebHook();
+            // Устанавливаем новый
+            await bot.setWebHook(webhookUrl);
+            console.log(`🔗 Webhook set: ${WEBAPP_URL}/bot***`);
+        } catch (e) {
+            console.error('Failed to set webhook:', e.message);
+            // Fallback: пробуем polling с задержкой
+            console.log('⚠️ Falling back to polling mode...');
+            setTimeout(() => {
+                try {
+                    bot.startPolling({ restart: false });
+                    bot.on('message', handleBotMessage);
+                    console.log('🔄 Polling started');
+                } catch (pe) {
+                    console.error('Polling failed:', pe.message);
+                }
+            }, 5000);
+        }
+    }
+});

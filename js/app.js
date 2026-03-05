@@ -173,20 +173,67 @@ class LoveApp {
     }
 
     fixTelegramInputs() {
-        document.addEventListener('click', e => {
+        // --- FIX 1: Скрываем нижнюю навигацию при открытии клавиатуры ---
+        const handleFocusIn = (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                setTimeout(() => e.target.focus(), 100);
+                document.body.classList.add('keyboard-open');
+                // Прокручиваем к полю ввода с задержкой (ждём анимацию клавиатуры)
+                setTimeout(() => {
+                    e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 300);
             }
-        });
+        };
+
+        const handleFocusOut = () => {
+            // Убираем класс с небольшой задержкой (клавиатура закрывается не мгновенно)
+            setTimeout(() => {
+                document.body.classList.remove('keyboard-open');
+            }, 150);
+        };
+
+        document.addEventListener('focusin', handleFocusIn);
+        document.addEventListener('focusout', handleFocusOut);
+
+        // --- FIX 2: Перехватываем клавиши в полях ввода (Telegram перехватывает) ---
         document.addEventListener('keydown', e => {
             const a = document.activeElement;
-            if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) e.stopPropagation();
+            if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) {
+                e.stopPropagation();
+            }
         }, true);
-    }
 
-    handleHashNavigation() {
-        const hash = window.location.hash.replace('#', '');
-        if (hash) setTimeout(() => this.navigateTo(hash), 600);
+        // --- FIX 3: Обработка visualViewport (определяем клавиатуру точнее) ---
+        if (window.visualViewport) {
+            let initialHeight = window.visualViewport.height;
+
+            window.visualViewport.addEventListener('resize', () => {
+                // Если высота уменьшилась больше чем на 25% — клавиатура открыта
+                const isKeyboard = window.visualViewport.height < initialHeight * 0.75;
+                document.body.classList.toggle('keyboard-open', isKeyboard);
+            });
+
+            // Обновляем начальную высоту при изменении ориентации
+            window.visualViewport.addEventListener('scroll', () => {
+                // Предотвращаем прыжки при скролле с открытой клавиатурой
+            });
+        }
+
+        // --- FIX 4: Предотвращаем двойной тап зум на iOS ---
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', (e) => {
+            const now = Date.now();
+            if (now - lastTouchEnd <= 300) {
+                e.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, { passive: false });
+
+        // --- FIX 5: Клик-фокус для Telegram WebApp (некоторые версии не дают фокус) ---
+        document.addEventListener('click', e => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                setTimeout(() => e.target.focus(), 50);
+            }
+        });
     }
 
     // ========== НАВИГАЦИЯ ==========
@@ -484,6 +531,27 @@ class LoveApp {
     }
 
     closeAlbumView() { document.getElementById('albumViewOverlay')?.remove(); }
+
+    deleteAdminEvent(eventId) {
+        this.showConfirmModal('Удалить событие?', () => {
+            this.storage.deleteEvent(eventId);
+            this.showToast('Событие удалено 🗑️');
+            if (this.currentPage === 'admin') this.admin.renderFullAdmin();
+            if (this.currentPage === 'calendar') this.calendar.renderCalendar();
+            this.updateUpcomingEvents();
+        });
+    }
+
+    deleteAdminLetter(letterId) {
+        this.showConfirmModal('Удалить письмо?', () => {
+            this.storage.deleteLetter(letterId);
+            this.showToast('Письмо удалено 🗑️');
+            if (this.currentPage === 'admin') this.admin.renderFullAdmin();
+            if (this.currentPage === 'letters') this.renderLettersContent();
+            this.nav?.updateBadges();
+        });
+    }
+
 
     renderGiftsContent() {
         const profile = this.storage.getProfile();

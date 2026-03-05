@@ -1,10 +1,10 @@
-// js/profile.js — Обновлённый профиль с фото, настройками, темами
+// js/profile.js — Профиль (ИСПРАВЛЕНА ОПЕЧАТКА daysTogther -> daysTogether)
 
 class ProfileManager {
     constructor(storage, isAdmin = false) {
         this.storage = storage;
         this.isAdmin = isAdmin;
-        
+
         this.themes = [
             { id: 'pink', name: 'Розовая', emoji: '🌸', primary: '#FF85A2', gradient: 'linear-gradient(135deg, #FFE4F0 0%, #E8D5F5 50%, #FFDAB9 100%)' },
             { id: 'lavender', name: 'Лавандовая', emoji: '💜', primary: '#9B59B6', gradient: 'linear-gradient(135deg, #E8D5F5 0%, #D1C4E9 50%, #E1BEE7 100%)' },
@@ -16,30 +16,24 @@ class ProfileManager {
         ];
     }
 
-    // ========== РЕНДЕР СТРАНИЦЫ ПРОФИЛЯ ==========
     renderProfilePage() {
         const profile = this.storage.getProfile();
         const stats = this.storage.getStats();
 
         return `
             <div class="profile-page-new">
-                <!-- Шапка профиля -->
                 <div class="profile-header-new">
-                    <div class="profile-cover">
-                        <div class="cover-pattern"></div>
-                    </div>
-                    
+                    <div class="profile-cover"><div class="cover-pattern"></div></div>
                     <div class="profile-avatar-section">
                         <div class="profile-avatar-container" onclick="app.profile.changeAvatar()">
                             <div class="profile-avatar-new" id="profileAvatarNew">
-                                ${profile.avatarUrl 
-                                    ? `<img src="${profile.avatarUrl}" alt="Avatar">` 
-                                    : `<span class="avatar-emoji">${this.isAdmin ? '🤴' : '👸'}</span>`
+                                ${profile.avatarUrl
+                                    ? `<img src="${profile.avatarUrl}" alt="Avatar">`
+                                    : `<span class="avatar-emoji">${profile.avatarEmoji || (this.isAdmin ? '🤴' : '👸')}</span>`
                                 }
                             </div>
                             <div class="avatar-edit-badge">📷</div>
                         </div>
-                        
                         <div class="profile-info-main">
                             <h1 class="profile-name-new" onclick="app.profile.editName()">
                                 ${this.isAdmin ? (profile.adminName || 'Любимый') : (profile.userName || 'Любимая')}
@@ -55,10 +49,9 @@ class ProfileManager {
                     </div>
                 </div>
 
-                <!-- Статистика -->
                 <div class="profile-stats-new">
                     <div class="stat-card">
-                        <span class="stat-value">${stats.daysTogther || 0}</span>
+                        <span class="stat-value">${stats.daysTogether || 0}</span>
                         <span class="stat-label">дней вместе</span>
                     </div>
                     <div class="stat-card highlight">
@@ -71,7 +64,6 @@ class ProfileManager {
                     </div>
                 </div>
 
-                <!-- Наша история -->
                 <div class="profile-section-card" onclick="app.profile.showOurStory()">
                     <div class="section-card-icon">💑</div>
                     <div class="section-card-content">
@@ -81,7 +73,6 @@ class ProfileManager {
                     <span class="section-card-arrow">›</span>
                 </div>
 
-                <!-- Меню -->
                 <div class="profile-menu-new">
                     <div class="menu-item-new" onclick="app.profile.openSettings()">
                         <div class="menu-icon-new">⚙️</div>
@@ -91,7 +82,6 @@ class ProfileManager {
                         </div>
                         <span class="menu-arrow">›</span>
                     </div>
-                    
                     <div class="menu-item-new" onclick="app.navigateTo('gallery')">
                         <div class="menu-icon-new">📸</div>
                         <div class="menu-text-new">
@@ -100,7 +90,6 @@ class ProfileManager {
                         </div>
                         <span class="menu-arrow">›</span>
                     </div>
-                    
                     <div class="menu-item-new" onclick="app.navigateTo('gifts')">
                         <div class="menu-icon-new">🎁</div>
                         <div class="menu-text-new">
@@ -109,7 +98,6 @@ class ProfileManager {
                         </div>
                         <span class="menu-arrow">›</span>
                     </div>
-                    
                     <div class="menu-item-new" onclick="app.navigateTo('letters')">
                         <div class="menu-icon-new">💌</div>
                         <div class="menu-text-new">
@@ -118,7 +106,6 @@ class ProfileManager {
                         </div>
                         <span class="menu-arrow">›</span>
                     </div>
-                    
                     ${this.isAdmin ? `
                         <div class="menu-item-new admin-item" onclick="app.navigateTo('admin')">
                             <div class="menu-icon-new">🛠️</div>
@@ -130,8 +117,7 @@ class ProfileManager {
                         </div>
                     ` : ''}
                 </div>
-                
-                <!-- Баланс звёзд (для пользователя) -->
+
                 ${!this.isAdmin ? `
                     <div class="stars-balance-card">
                         <div class="stars-icon">⭐</div>
@@ -139,9 +125,7 @@ class ProfileManager {
                             <span class="stars-amount">${profile.userStars || 0}</span>
                             <span class="stars-label">звёзд</span>
                         </div>
-                        <button class="stars-shop-btn" onclick="app.profile.openStarsShop()">
-                            Магазин 🛒
-                        </button>
+                        <button class="stars-shop-btn" onclick="app.profile.openStarsShop()">Магазин 🛒</button>
                     </div>
                 ` : ''}
             </div>
@@ -150,8 +134,9 @@ class ProfileManager {
 
     // ========== НАСТРОЙКИ ==========
     openSettings() {
+        document.getElementById('settingsOverlay')?.remove();
         const profile = this.storage.getProfile();
-        
+
         const html = `
             <div class="settings-overlay active" id="settingsOverlay">
                 <div class="settings-page">
@@ -159,12 +144,9 @@ class ProfileManager {
                         <button class="settings-back" onclick="app.profile.closeSettings()">‹</button>
                         <h1>⚙️ Настройки</h1>
                     </div>
-                    
                     <div class="settings-content">
-                        <!-- Аккаунт -->
                         <div class="settings-section">
                             <h2 class="settings-section-title">Аккаунт</h2>
-                            
                             <div class="setting-item" onclick="app.profile.editName()">
                                 <div class="setting-icon">👤</div>
                                 <div class="setting-info">
@@ -173,7 +155,6 @@ class ProfileManager {
                                 </div>
                                 <span class="setting-arrow">›</span>
                             </div>
-                            
                             <div class="setting-item" onclick="app.profile.editStatus()">
                                 <div class="setting-icon">💬</div>
                                 <div class="setting-info">
@@ -182,7 +163,6 @@ class ProfileManager {
                                 </div>
                                 <span class="setting-arrow">›</span>
                             </div>
-                            
                             <div class="setting-item" onclick="app.profile.changeAvatar()">
                                 <div class="setting-icon">📷</div>
                                 <div class="setting-info">
@@ -192,13 +172,11 @@ class ProfileManager {
                                 <span class="setting-arrow">›</span>
                             </div>
                         </div>
-                        
-                        <!-- Темы -->
                         <div class="settings-section">
                             <h2 class="settings-section-title">Тема оформления</h2>
                             <div class="themes-grid">
                                 ${this.themes.map(theme => `
-                                    <div class="theme-card ${profile.theme === theme.id ? 'active' : ''}" 
+                                    <div class="theme-card ${profile.theme === theme.id ? 'active' : ''}"
                                          onclick="app.profile.setTheme('${theme.id}')"
                                          style="background: ${theme.gradient}">
                                         <span class="theme-emoji">${theme.emoji}</span>
@@ -208,11 +186,8 @@ class ProfileManager {
                                 `).join('')}
                             </div>
                         </div>
-                        
-                        <!-- Уведомления -->
                         <div class="settings-section">
                             <h2 class="settings-section-title">Уведомления</h2>
-                            
                             <div class="setting-item">
                                 <div class="setting-icon">🔔</div>
                                 <div class="setting-info">
@@ -220,60 +195,24 @@ class ProfileManager {
                                     <span class="setting-desc">Письма, подарки, события</span>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" id="notifToggle" 
-                                           ${profile.notifications ? 'checked' : ''}
-                                           onchange="app.profile.toggleNotifications()">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            
-                            <div class="setting-item">
-                                <div class="setting-icon">💌</div>
-                                <div class="setting-info">
-                                    <span class="setting-title">Новые письма</span>
-                                    <span class="setting-desc">Уведомлять о новых письмах</span>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="letterNotifToggle" 
-                                           ${profile.letterNotifications !== false ? 'checked' : ''}
-                                           onchange="app.profile.toggleLetterNotifications()">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            
-                            <div class="setting-item">
-                                <div class="setting-icon">🎁</div>
-                                <div class="setting-info">
-                                    <span class="setting-title">Подарки</span>
-                                    <span class="setting-desc">Уведомлять о новых подарках</span>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="giftNotifToggle" 
-                                           ${profile.giftNotifications !== false ? 'checked' : ''}
-                                           onchange="app.profile.toggleGiftNotifications()">
+                                    <input type="checkbox" ${profile.notifications ? 'checked' : ''} onchange="app.profile.toggleNotifications()">
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
                         </div>
-                        
-                        <!-- Наша история -->
                         <div class="settings-section">
                             <h2 class="settings-section-title">Наша история</h2>
-                            
                             <div class="setting-item" onclick="app.admin.editCoupleDate()">
                                 <div class="setting-icon">📅</div>
                                 <div class="setting-info">
-                                    <span class="setting-title">Дата начала отношений</span>
+                                    <span class="setting-title">Дата начала</span>
                                     <span class="setting-value">${profile.coupleDate || '22 октября 2023'}</span>
                                 </div>
                                 <span class="setting-arrow">›</span>
                             </div>
                         </div>
-                        
-                        <!-- Данные -->
                         <div class="settings-section">
                             <h2 class="settings-section-title">Данные</h2>
-                            
                             <div class="setting-item" onclick="app.admin.exportData()">
                                 <div class="setting-icon">📤</div>
                                 <div class="setting-info">
@@ -282,7 +221,6 @@ class ProfileManager {
                                 </div>
                                 <span class="setting-arrow">›</span>
                             </div>
-                            
                             <div class="setting-item danger" onclick="app.admin.resetData()">
                                 <div class="setting-icon">🗑️</div>
                                 <div class="setting-info">
@@ -296,16 +234,17 @@ class ProfileManager {
                 </div>
             </div>
         `;
-        
         document.body.insertAdjacentHTML('beforeend', html);
     }
-    
+
     closeSettings() {
         document.getElementById('settingsOverlay')?.remove();
     }
 
-    // ========== ЗАГРУЗКА ФОТО ПРОФИЛЯ ==========
+    // ========== АВАТАР ==========
     changeAvatar() {
+        document.getElementById('avatarModal')?.remove();
+
         const html = `
             <div class="admin-modal-overlay active" id="avatarModal">
                 <div class="admin-modal small">
@@ -315,14 +254,13 @@ class ProfileManager {
                     </div>
                     <div class="admin-modal-body">
                         <div class="avatar-preview-large" id="avatarPreviewLarge">
-                            ${this.storage.getProfile().avatarUrl 
-                                ? `<img src="${this.storage.getProfile().avatarUrl}" alt="">` 
-                                : `<span>${this.isAdmin ? '🤴' : '👸'}</span>`
+                            ${this.storage.getProfile().avatarUrl
+                                ? `<img src="${this.storage.getProfile().avatarUrl}" alt="">`
+                                : `<span>${this.storage.getProfile().avatarEmoji || (this.isAdmin ? '🤴' : '👸')}</span>`
                             }
                         </div>
-                        
                         <div class="avatar-options">
-                            <button class="avatar-option-btn" onclick="app.profile.uploadAvatarPhoto()">
+                            <button class="avatar-option-btn" onclick="document.getElementById('avatarFileInput').click()">
                                 📷 Загрузить фото
                             </button>
                             <button class="avatar-option-btn" onclick="app.profile.chooseAvatarEmoji()">
@@ -334,110 +272,68 @@ class ProfileManager {
                                 </button>
                             ` : ''}
                         </div>
-                        
-                        <input type="file" id="avatarFileInput" accept="image/*" 
+                        <input type="file" id="avatarFileInput" accept="image/*"
                                style="display:none" onchange="app.profile.handleAvatarUpload(event)">
                     </div>
                 </div>
             </div>
         `;
-        
         document.body.insertAdjacentHTML('beforeend', html);
     }
-    
-    uploadAvatarPhoto() {
-        document.getElementById('avatarFileInput')?.click();
-    }
-    
+
     handleAvatarUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
-        
-        // Ограничение размера (5MB)
         if (file.size > 5 * 1024 * 1024) {
-            window.app?.toast?.show('Файл слишком большой! Максимум 5MB 📁');
+            window.app?.showToast('Максимум 5MB! 📁');
             return;
         }
-        
         const reader = new FileReader();
         reader.onload = (e) => {
-            const avatarUrl = e.target.result;
-            this.storage.updateProfile({ avatarUrl });
-            
-            // Обновить превью
-            const preview = document.getElementById('avatarPreviewLarge');
-            if (preview) {
-                preview.innerHTML = `<img src="${avatarUrl}" alt="">`;
-            }
-            
-            window.app?.toast?.show('Фото обновлено! 📸');
+            this.storage.updateProfile({ avatarUrl: e.target.result });
             document.getElementById('avatarModal')?.remove();
-            
-            // Обновить все аватары на странице
+            window.app?.showToast('Фото обновлено! 📸');
             this.updateAllAvatars();
         };
         reader.readAsDataURL(file);
     }
-    
+
     chooseAvatarEmoji() {
         const emojis = ['👸', '🤴', '👩', '👨', '🧑', '💃', '🕺', '🦄', '🐱', '🐰', '🌸', '🦋', '⭐', '💖', '🌹', '🎀'];
-        
         const grid = document.querySelector('.avatar-options');
         if (grid) {
             grid.innerHTML = `
                 <div class="emoji-grid-avatar">
-                    ${emojis.map(e => `
-                        <button class="emoji-avatar-btn" onclick="app.profile.setAvatarEmoji('${e}')">${e}</button>
-                    `).join('')}
+                    ${emojis.map(e => `<button class="emoji-avatar-btn" onclick="app.profile.setAvatarEmoji('${e}')">${e}</button>`).join('')}
                 </div>
             `;
         }
     }
-    
+
     setAvatarEmoji(emoji) {
         this.storage.updateProfile({ avatarUrl: null, avatarEmoji: emoji });
-        
         document.getElementById('avatarModal')?.remove();
-        window.app?.toast?.show('Аватар обновлён! ' + emoji);
+        window.app?.showToast('Аватар: ' + emoji);
         this.updateAllAvatars();
     }
-    
+
     removeAvatar() {
         this.storage.updateProfile({ avatarUrl: null });
         document.getElementById('avatarModal')?.remove();
-        window.app?.toast?.show('Фото удалено 🗑️');
+        window.app?.showToast('Фото удалено 🗑️');
         this.updateAllAvatars();
     }
-    
+
     updateAllAvatars() {
-        const profile = this.storage.getProfile();
-        const avatarContent = profile.avatarUrl 
-            ? `<img src="${profile.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` 
-            : (profile.avatarEmoji || (this.isAdmin ? '🤴' : '👸'));
-        
-        // Обновить header avatar
-        const headerAvatar = document.getElementById('headerAvatar');
-        if (headerAvatar) {
-            headerAvatar.innerHTML = avatarContent;
-        }
-        
-        // Обновить menu avatar
-        const menuAvatar = document.getElementById('menuAvatar');
-        if (menuAvatar) {
-            menuAvatar.innerHTML = avatarContent;
-        }
-        
-        // Перерендерить профиль если открыт
-        if (window.app?.currentPage === 'profile') {
-            window.app.navigateTo('profile');
-        }
+        window.app?.updateHeaderUI();
+        if (window.app?.currentPage === 'profile') window.app.renderProfileContent();
     }
 
-    // ========== РЕДАКТИРОВАНИЕ ИМЕНИ ==========
+    // ========== ИМЯ ==========
     editName() {
+        document.getElementById('editNameModal')?.remove();
         const profile = this.storage.getProfile();
         const currentName = this.isAdmin ? (profile.adminName || 'Любимый') : (profile.userName || 'Любимая');
-        
         const html = `
             <div class="admin-modal-overlay active" id="editNameModal">
                 <div class="admin-modal small">
@@ -448,49 +344,38 @@ class ProfileManager {
                     <div class="admin-modal-body">
                         <div class="admin-field">
                             <label>Твоё имя</label>
-                            <input type="text" class="admin-input" id="newNameInput" 
+                            <input type="text" class="admin-input" id="newNameInput"
                                    value="${currentName}" placeholder="Введите имя..." maxlength="20">
                         </div>
-                        <button class="admin-submit-btn" onclick="app.profile.saveName()">
-                            💾 Сохранить
-                        </button>
+                        <button class="admin-submit-btn" onclick="app.profile.saveName()">💾 Сохранить</button>
                     </div>
                 </div>
             </div>
         `;
-        
         document.body.insertAdjacentHTML('beforeend', html);
         document.getElementById('newNameInput')?.focus();
     }
-    
+
     saveName() {
-        const input = document.getElementById('newNameInput');
-        const name = input?.value?.trim();
-        
-        if (!name) {
-            window.app?.toast?.show('Введите имя! ✏️');
-            return;
-        }
-        
+        const name = document.getElementById('newNameInput')?.value?.trim();
+        if (!name) { window.app?.showToast('Введите имя! ✏️'); return; }
         if (this.isAdmin) {
             this.storage.updateProfile({ adminName: name });
         } else {
-            this.storage.updateProfile({ userName: name });
+            this.storage.updateProfile({ userName: name, nameSetManually: true });
         }
-        
         document.getElementById('editNameModal')?.remove();
-        window.app?.toast?.show('Имя обновлено! ✨');
+        window.app?.showToast('Имя обновлено! ✨');
         window.app?.updateHeaderUI();
-        
-        if (window.app?.currentPage === 'profile') {
-            window.app.navigateTo('profile');
-        }
+        if (window.app?.currentPage === 'profile') window.app.renderProfileContent();
+        document.getElementById('settingsOverlay')?.remove();
+        this.openSettings();
     }
 
-    // ========== РЕДАКТИРОВАНИЕ СТАТУСА ==========
+    // ========== СТАТУС ==========
     editStatus() {
+        document.getElementById('editStatusModal')?.remove();
         const profile = this.storage.getProfile();
-        
         const html = `
             <div class="admin-modal-overlay active" id="editStatusModal">
                 <div class="admin-modal small">
@@ -501,72 +386,53 @@ class ProfileManager {
                     <div class="admin-modal-body">
                         <div class="admin-field">
                             <label>Твой статус</label>
-                            <input type="text" class="admin-input" id="newStatusInput" 
-                                   value="${profile.userStatus || ''}" 
-                                   placeholder="Например: Самая счастливая 💕" maxlength="50">
+                            <input type="text" class="admin-input" id="newStatusInput"
+                                   value="${profile.userStatus || ''}"
+                                   placeholder="Самая счастливая 💕" maxlength="50">
                         </div>
                         <div class="status-suggestions">
                             <span onclick="document.getElementById('newStatusInput').value='Самая счастливая 💕'">Самая счастливая 💕</span>
                             <span onclick="document.getElementById('newStatusInput').value='Люблю тебя ❤️'">Люблю тебя ❤️</span>
                             <span onclick="document.getElementById('newStatusInput').value='Мечтаю о тебе ✨'">Мечтаю о тебе ✨</span>
                         </div>
-                        <button class="admin-submit-btn" onclick="app.profile.saveStatus()">
-                            💾 Сохранить
-                        </button>
+                        <button class="admin-submit-btn" onclick="app.profile.saveStatus()">💾 Сохранить</button>
                     </div>
                 </div>
             </div>
         `;
-        
         document.body.insertAdjacentHTML('beforeend', html);
     }
-    
+
     saveStatus() {
-        const input = document.getElementById('newStatusInput');
-        const status = input?.value?.trim() || '';
-        
-        this.storage.updateProfile({ userStatus: status });
-        
+        this.storage.updateProfile({ userStatus: document.getElementById('newStatusInput')?.value?.trim() || '' });
         document.getElementById('editStatusModal')?.remove();
-        window.app?.toast?.show('Статус обновлён! 💬');
-        
-        if (window.app?.currentPage === 'profile') {
-            window.app.navigateTo('profile');
-        }
+        window.app?.showToast('Статус обновлён! 💬');
+        if (window.app?.currentPage === 'profile') window.app.renderProfileContent();
     }
 
     // ========== ТЕМЫ ==========
     setTheme(themeId) {
         const theme = this.themes.find(t => t.id === themeId);
         if (!theme) return;
-        
         this.storage.updateProfile({ theme: themeId });
         this.applyTheme(theme);
-        
-        // Обновить UI настроек
         document.querySelectorAll('.theme-card').forEach(card => {
             card.classList.remove('active');
             const check = card.querySelector('.theme-check');
             if (check) check.remove();
         });
-        
         const activeCard = document.querySelector(`.theme-card[onclick*="${themeId}"]`);
         if (activeCard) {
             activeCard.classList.add('active');
             activeCard.insertAdjacentHTML('beforeend', '<span class="theme-check">✓</span>');
         }
-        
-        window.app?.toast?.show(`Тема "${theme.name}" применена! ${theme.emoji}`);
+        window.app?.showToast(`Тема "${theme.name}"! ${theme.emoji}`);
     }
-    
+
     applyTheme(theme) {
         const root = document.documentElement;
-        
-        // Основные цвета темы
         root.style.setProperty('--gradient-main', theme.gradient);
         root.style.setProperty('--pink', theme.primary);
-        
-        // Для тёмной темы
         if (theme.id === 'dark') {
             root.style.setProperty('--text-dark', '#FFFFFF');
             root.style.setProperty('--text-light', '#B0B0B0');
@@ -579,37 +445,33 @@ class ProfileManager {
             document.body.classList.remove('dark-theme');
         }
     }
-    
+
     loadSavedTheme() {
-        const profile = this.storage.getProfile();
-        const theme = this.themes.find(t => t.id === profile.theme);
-        if (theme) {
-            this.applyTheme(theme);
-        }
+        const theme = this.themes.find(t => t.id === this.storage.getProfile().theme);
+        if (theme) this.applyTheme(theme);
     }
 
-    // ========== УВЕДОМЛЕНИЯ ==========
     toggleNotifications() {
         const profile = this.storage.getProfile();
         this.storage.updateProfile({ notifications: !profile.notifications });
-        window.app?.toast?.show(profile.notifications ? 'Уведомления выключены 🔕' : 'Уведомления включены 🔔');
+        window.app?.showToast(profile.notifications ? 'Выключены 🔕' : 'Включены 🔔');
     }
-    
+
     toggleLetterNotifications() {
         const profile = this.storage.getProfile();
-        this.storage.updateProfile({ letterNotifications: !profile.letterNotifications });
+        this.storage.updateProfile({ letterNotifications: !(profile.letterNotifications !== false) });
     }
-    
+
     toggleGiftNotifications() {
         const profile = this.storage.getProfile();
-        this.storage.updateProfile({ giftNotifications: !profile.giftNotifications });
+        this.storage.updateProfile({ giftNotifications: !(profile.giftNotifications !== false) });
     }
 
     // ========== НАША ИСТОРИЯ ==========
     showOurStory() {
+        document.getElementById('ourStoryModal')?.remove();
         const profile = this.storage.getProfile();
         const stats = this.storage.getStats();
-        
         const html = `
             <div class="admin-modal-overlay active" id="ourStoryModal">
                 <div class="admin-modal">
@@ -622,78 +484,56 @@ class ProfileManager {
                             <div class="story-hearts">💕</div>
                             <div class="story-date-big">${profile.coupleDate || '22 октября 2023'}</div>
                             <div class="story-days">
-                                <span class="days-number">${stats.daysTogther || 0}</span>
+                                <span class="days-number">${stats.daysTogether || 0}</span>
                                 <span class="days-label">дней вместе</span>
                             </div>
-                            
                             <div class="story-stats">
-                                <div class="story-stat">
-                                    <span>💌</span>
-                                    <span>${stats.lettersReceived || 0} писем</span>
-                                </div>
-                                <div class="story-stat">
-                                    <span>🎁</span>
-                                    <span>${stats.giftsReceived || 0} подарков</span>
-                                </div>
-                                <div class="story-stat">
-                                    <span>😊</span>
-                                    <span>${stats.reactionsGiven || 0} реакций</span>
-                                </div>
+                                <div class="story-stat"><span>💌</span><span>${stats.lettersReceived || 0} писем</span></div>
+                                <div class="story-stat"><span>🎁</span><span>${stats.giftsReceived || 0} подарков</span></div>
+                                <div class="story-stat"><span>😊</span><span>${stats.reactionsGiven || 0} реакций</span></div>
                             </div>
-                            
-                            <div class="story-message">
-                                Каждый день с тобой — счастье! ✨
-                            </div>
+                            <div class="story-message">Каждый день с тобой — счастье! ✨</div>
                         </div>
                     </div>
                 </div>
             </div>
         `;
-        
         document.body.insertAdjacentHTML('beforeend', html);
     }
 
-    // ========== МАГАЗИН ЗВЁЗД ==========
+    // ========== МАГАЗИН ==========
     openStarsShop() {
+        document.getElementById('starsShopOverlay')?.remove();
         const profile = this.storage.getProfile();
         const userStars = profile.userStars || 0;
-        
+
         const shopItems = [
             { id: 'flowers_rose', name: 'Букет роз', emoji: '🌹', price: 50, desc: 'Настоящий букет роз!' },
             { id: 'flowers_tulips', name: 'Тюльпаны', emoji: '🌷', price: 30, desc: 'Свежие тюльпаны' },
             { id: 'chocolate', name: 'Шоколад', emoji: '🍫', price: 15, desc: 'Вкусный шоколад' },
             { id: 'dinner', name: 'Романтический ужин', emoji: '🍽️', price: 100, desc: 'Ужин в ресторане' },
             { id: 'movie', name: 'Кино', emoji: '🎬', price: 40, desc: 'Поход в кинотеатр' },
-            { id: 'tg_stars_10', name: '10 TG Stars', emoji: '⭐', price: 20, desc: 'Звёзды Telegram' },
-            { id: 'tg_stars_50', name: '50 TG Stars', emoji: '🌟', price: 90, desc: 'Звёзды Telegram' },
             { id: 'surprise', name: 'Сюрприз', emoji: '🎁', price: 75, desc: 'Секретный подарок!' },
         ];
-        
+
         const html = `
             <div class="stars-shop-overlay active" id="starsShopOverlay">
                 <div class="stars-shop">
                     <div class="stars-shop-header">
                         <button class="stars-shop-close" onclick="document.getElementById('starsShopOverlay').remove()">✕</button>
                         <h2>🛒 Магазин</h2>
-                        <div class="stars-shop-balance">
-                            <span>⭐</span>
-                            <span>${userStars}</span>
-                        </div>
+                        <div class="stars-shop-balance"><span>⭐</span><span>${userStars}</span></div>
                     </div>
-                    
                     <div class="stars-shop-content">
                         <p class="shop-desc">Обменяй звёзды на реальные подарки!</p>
-                        
                         <div class="shop-items-grid">
                             ${shopItems.map(item => `
-                                <div class="shop-item ${userStars < item.price ? 'disabled' : ''}" 
+                                <div class="shop-item ${userStars < item.price ? 'disabled' : ''}"
                                      onclick="app.profile.buyShopItem('${item.id}', ${item.price})">
                                     <div class="shop-item-emoji">${item.emoji}</div>
                                     <div class="shop-item-name">${item.name}</div>
                                     <div class="shop-item-desc">${item.desc}</div>
-                                    <div class="shop-item-price">
-                                        <span>⭐</span> ${item.price}
-                                    </div>
+                                    <div class="shop-item-price"><span>⭐</span> ${item.price}</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -701,52 +541,32 @@ class ProfileManager {
                 </div>
             </div>
         `;
-        
         document.body.insertAdjacentHTML('beforeend', html);
     }
-    
+
     buyShopItem(itemId, price) {
         const profile = this.storage.getProfile();
-        const userStars = profile.userStars || 0;
-        
-        if (userStars < price) {
-            window.app?.toast?.show('Недостаточно звёзд! ⭐');
+        if ((profile.userStars || 0) < price) {
+            window.app?.showToast('Недостаточно звёзд! ⭐');
             return;
         }
-        
-        if (!confirm(`Купить за ${price} ⭐?`)) return;
-        
-        // Списать звёзды у пользователя
-        this.storage.updateProfile({ userStars: userStars - price });
-        
-        // Создать заказ (уведомление админу)
-        const order = {
-            id: 'order_' + Date.now(),
-            itemId,
-            price,
-            date: new Date().toISOString(),
-            status: 'pending'
-        };
-        
-        // Сохранить заказ
-        const orders = this.storage.get('orders') || [];
-        orders.push(order);
-        this.storage.set('orders', orders);
-        
-        // Уведомление админу (сохраняем в notifications)
-        const notifications = this.storage.get('notifications') || [];
-        notifications.push({
-            id: 'notif_' + Date.now(),
-            type: 'order',
-            message: `Новый заказ! ${itemId} за ${price} ⭐`,
-            date: new Date().toISOString(),
-            read: false
+
+        window.app.showConfirmModal(`Купить за ${price} ⭐?`, () => {
+            this.storage.updateProfile({ userStars: (profile.userStars || 0) - price });
+            const orders = this.storage.get('orders') || [];
+            orders.push({ id: 'order_' + Date.now(), itemId, price, date: new Date().toISOString(), status: 'pending' });
+            this.storage.set('orders', orders);
+            this.storage.addNotification({
+                id: 'notif_' + Date.now(),
+                type: 'order',
+                message: `Заказ: ${itemId} за ${price} ⭐`,
+                date: new Date().toISOString(),
+                read: false
+            });
+            document.getElementById('starsShopOverlay')?.remove();
+            window.app?.effects?.launchConfetti(50);
+            window.app?.showToast('Заказ оформлен! 🎉');
         });
-        this.storage.set('notifications', notifications);
-        
-        document.getElementById('starsShopOverlay')?.remove();
-        window.app?.effects?.launchConfetti(50);
-        window.app?.toast?.show('Заказ оформлен! Админ скоро выполнит его 🎉');
     }
 }
 
