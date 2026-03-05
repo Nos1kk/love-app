@@ -5,7 +5,6 @@ const TelegramBot = require('node-telegram-bot-api');
 const BOT_TOKEN = process.env.BOT_TOKEN || '8571890995:AAGls0kbQVVFt6FSHz20LwpQ5-YztJNpoX4';
 const PORT = process.env.PORT || 3000;
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://love-app.amvera.io';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '1234';
 
 const app = express();
 
@@ -20,14 +19,10 @@ app.use((req, res, next) => {
     next();
 });
 
-app.use(express.static(path.join(__dirname), {
-    maxAge: '1h',
-    etag: true
-}));
+app.use(express.static(path.join(__dirname), { maxAge: '1h', etag: true }));
 app.use(express.json({ limit: '10mb' }));
 
 // ========== IN-MEMORY SHARED STORE ==========
-// Это общее хранилище для синхронизации между admin и user
 const sharedStore = {
     letters: [],
     events: [],
@@ -59,11 +54,21 @@ const sharedStore = {
         eventsMade: 0,
         reactionsGiven: 0
     },
-    _version: 0, // Версия для отслеживания изменений
+    _version: 0,
     _lastUpdate: Date.now()
 };
 
-// Инициализация демо-данных
+function getNextDateStr(daysFromNow) {
+    const d = new Date();
+    d.setDate(d.getDate() + daysFromNow);
+    return d.toISOString().split('T')[0];
+}
+
+function bumpVersion() {
+    sharedStore._version++;
+    sharedStore._lastUpdate = Date.now();
+}
+
 function initDemoData() {
     if (sharedStore.letters.length > 0) return;
     
@@ -80,18 +85,6 @@ function initDemoData() {
             date: new Date(now - 2 * day).toISOString(),
             read: false,
             favorite: false,
-            reactions: [],
-            replies: []
-        },
-        {
-            id: 'letter_demo_2',
-            from: 'admin',
-            subject: 'Ты — моя вселенная',
-            text: 'Знаешь, что самое прекрасное в моей жизни? Это ты.',
-            mood: '🌙',
-            date: new Date(now - 5 * day).toISOString(),
-            read: true,
-            favorite: true,
             reactions: [],
             replies: []
         }
@@ -126,9 +119,14 @@ function initDemoData() {
         { id: 'album_demo_1', name: 'Наши моменты', coverEmoji: '💑', photoCount: 0, createdAt: new Date().toISOString() }
     ];
     
-    const profile = sharedStore.profile;
-    if (profile.coupleDateRaw) {
-        const days = Math.floor((new Date() - new Date(profile.coupleDateRaw)) / 86400000);
+    const year = new Date().getFullYear();
+    sharedStore.specialDates = [
+        { id: 'sd_1', date: `${year}-02-14`, title: 'День Святого Валентина', emoji: '💝' },
+        { id: 'sd_2', date: `${year}-03-08`, title: '8 Марта', emoji: '🌷' },
+    ];
+    
+    if (sharedStore.profile.coupleDateRaw) {
+        const days = Math.floor((new Date() - new Date(sharedStore.profile.coupleDateRaw)) / 86400000);
         sharedStore.stats.daysTogether = Math.max(0, days);
     }
     
@@ -137,29 +135,15 @@ function initDemoData() {
     sharedStore._version++;
 }
 
-function getNextDateStr(daysFromNow) {
-    const d = new Date();
-    d.setDate(d.getDate() + daysFromNow);
-    return d.toISOString().split('T')[0];
-}
-
-function bumpVersion() {
-    sharedStore._version++;
-    sharedStore._lastUpdate = Date.now();
-}
-
 initDemoData();
 
 // ========== API ROUTES ==========
 
-// Получить всё состояние (для первой загрузки и polling)
 app.get('/api/state', (req, res) => {
     const sinceVersion = parseInt(req.query.since) || 0;
-    
     if (sinceVersion >= sharedStore._version) {
         return res.json({ changed: false, version: sharedStore._version });
     }
-    
     res.json({
         changed: true,
         version: sharedStore._version,
@@ -180,7 +164,6 @@ app.get('/api/state', (req, res) => {
     });
 });
 
-// Получить версию (для быстрой проверки)
 app.get('/api/version', (req, res) => {
     res.json({ version: sharedStore._version, lastUpdate: sharedStore._lastUpdate });
 });
@@ -198,7 +181,6 @@ app.post('/api/letters', (req, res) => {
     sharedStore.letters.unshift(letter);
     sharedStore.stats.lettersReceived = sharedStore.letters.length;
     
-    // Добавить уведомление
     sharedStore.notifications.unshift({
         id: 'notif_' + Date.now(),
         type: 'letter',
@@ -210,8 +192,6 @@ app.post('/api/letters', (req, res) => {
     });
     
     bumpVersion();
-    
-    // Отправить push через бота
     sendBotNotification(`💌 Новое письмо: "${letter.subject || 'Без темы'}"`);
     
     res.json({ ok: true, letter, version: sharedStore._version });
@@ -220,7 +200,6 @@ app.post('/api/letters', (req, res) => {
 app.put('/api/letters/:id', (req, res) => {
     const idx = sharedStore.letters.findIndex(l => l.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Not found' });
-    
     Object.assign(sharedStore.letters[idx], req.body);
     bumpVersion();
     res.json({ ok: true, letter: sharedStore.letters[idx], version: sharedStore._version });
@@ -243,7 +222,6 @@ app.post('/api/letters/:id/reply', (req, res) => {
     if (!sharedStore.letters[idx].replies) sharedStore.letters[idx].replies = [];
     sharedStore.letters[idx].replies.push(reply);
     
-    // Уведомление
     sharedStore.notifications.unshift({
         id: 'notif_' + Date.now(),
         type: 'reply',
@@ -255,7 +233,7 @@ app.post('/api/letters/:id/reply', (req, res) => {
     });
     
     bumpVersion();
-    sendBotNotification(`💬 Ответ на письмо: "${(reply.text || '').substring(0, 40)}..."`);
+    sendBotNotification(`💬 Новый ответ: "${(reply.text || '').substring(0, 40)}..."`);
     
     res.json({ ok: true, version: sharedStore._version });
 });
@@ -280,18 +258,15 @@ app.post('/api/letters/:id/reaction', (req, res) => {
 app.post('/api/events', (req, res) => {
     const event = req.body;
     if (!event.id) event.id = 'event_' + Date.now();
-    
     sharedStore.events.push(event);
     sharedStore.stats.eventsMade = sharedStore.events.length;
     bumpVersion();
-    
     res.json({ ok: true, event, version: sharedStore._version });
 });
 
 app.put('/api/events/:id', (req, res) => {
     const idx = sharedStore.events.findIndex(e => e.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Not found' });
-    
     Object.assign(sharedStore.events[idx], req.body);
     bumpVersion();
     res.json({ ok: true, version: sharedStore._version });
@@ -345,7 +320,6 @@ app.post('/api/gifts', (req, res) => {
 app.put('/api/gifts/:id', (req, res) => {
     const idx = sharedStore.gifts.findIndex(g => g.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Not found' });
-    
     Object.assign(sharedStore.gifts[idx], req.body);
     bumpVersion();
     res.json({ ok: true, version: sharedStore._version });
@@ -357,7 +331,6 @@ app.post('/api/albums', (req, res) => {
     if (!album.id) album.id = 'album_' + Date.now();
     if (!album.createdAt) album.createdAt = new Date().toISOString();
     if (!album.photoCount) album.photoCount = 0;
-    
     sharedStore.albums.push(album);
     bumpVersion();
     res.json({ ok: true, version: sharedStore._version });
@@ -374,10 +347,8 @@ app.post('/api/photos', (req, res) => {
     const photo = req.body;
     if (!photo.id) photo.id = 'photo_' + Date.now();
     if (!photo.date) photo.date = new Date().toISOString();
-    
     sharedStore.photos.push(photo);
     
-    // Обновить счётчик альбома
     const albumIdx = sharedStore.albums.findIndex(a => a.id === photo.albumId);
     if (albumIdx >= 0) {
         sharedStore.albums[albumIdx].photoCount = (sharedStore.albums[albumIdx].photoCount || 0) + 1;
@@ -394,20 +365,16 @@ app.get('/api/profile', (req, res) => {
 
 app.put('/api/profile', (req, res) => {
     Object.assign(sharedStore.profile, req.body);
-    
-    // Обновить daysTogether при изменении даты
     if (req.body.coupleDateRaw) {
         const days = Math.floor((new Date() - new Date(req.body.coupleDateRaw)) / 86400000);
         sharedStore.stats.daysTogether = Math.max(0, days);
     }
-    
     bumpVersion();
     res.json({ ok: true, profile: sharedStore.profile, version: sharedStore._version });
 });
 
 // ===== STATS =====
 app.get('/api/stats', (req, res) => {
-    // Обновить daysTogether
     if (sharedStore.profile.coupleDateRaw) {
         const days = Math.floor((new Date() - new Date(sharedStore.profile.coupleDateRaw)) / 86400000);
         sharedStore.stats.daysTogether = Math.max(0, days);
@@ -513,23 +480,7 @@ app.delete('/api/notes/:id', (req, res) => {
     res.json({ ok: true, version: sharedStore._version });
 });
 
-// ===== BULK EXPORT/IMPORT =====
-app.get('/api/export', (req, res) => {
-    res.json({
-        letters: sharedStore.letters,
-        events: sharedStore.events,
-        gifts: sharedStore.gifts,
-        albums: sharedStore.albums,
-        photos: sharedStore.photos.map(p => ({ ...p, files: [] })), // Без файлов для экспорта
-        specialDates: sharedStore.specialDates,
-        orders: sharedStore.orders,
-        goals: sharedStore.goals,
-        quickNotes: sharedStore.quickNotes,
-        profile: sharedStore.profile,
-        stats: sharedStore.stats
-    });
-});
-
+// ===== RESET =====
 app.post('/api/reset', (req, res) => {
     sharedStore.letters = [];
     sharedStore.events = [];
@@ -542,17 +493,10 @@ app.post('/api/reset', (req, res) => {
     sharedStore.goals = [];
     sharedStore.quickNotes = [];
     sharedStore.profile = {
-        userName: 'Любимая',
-        adminName: 'Любимый',
-        userStatus: '',
-        coupleDate: '22 октября 2023',
-        coupleDateRaw: '2023-10-22',
-        notifications: true,
-        theme: 'pink',
-        userStars: 50,
-        adminStars: 100,
-        avatarEmoji: null,
-        avatarUrl: null
+        userName: 'Любимая', adminName: 'Любимый', userStatus: '',
+        coupleDate: '22 октября 2023', coupleDateRaw: '2023-10-22',
+        notifications: true, theme: 'pink', userStars: 50, adminStars: 100,
+        avatarEmoji: null, avatarUrl: null
     };
     sharedStore.stats = { daysTogether: 0, lettersReceived: 0, giftsReceived: 0, eventsMade: 0, reactionsGiven: 0 };
     bumpVersion();
@@ -562,7 +506,7 @@ app.post('/api/reset', (req, res) => {
 
 // ===== HEALTH =====
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', uptime: process.uptime(), version: sharedStore._version });
+    res.json({ status: 'ok', uptime: process.uptime(), version: sharedStore._version, botActive: !!bot });
 });
 
 app.get('/', (req, res) => {
@@ -571,106 +515,142 @@ app.get('/', (req, res) => {
 
 // ========== START SERVER ==========
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
 
-// ========== BOT ==========
-let bot;
-let botChatIds = new Set(); // Собираем chatId для уведомлений
-
-try {
-    bot = new TelegramBot(BOT_TOKEN, { polling: true });
-    
-    bot.on('polling_error', (err) => {
-        console.error('Bot polling error:', err.code);
-    });
-
-    bot.onText(/\/start/, (msg) => {
-        const chatId = msg.chat.id;
-        botChatIds.add(chatId);
-        const name = msg.from.first_name || 'Любимая';
-
-        bot.sendMessage(chatId,
-            `💕 Привет, ${name}!\n\nДобро пожаловать в наше приложение любви!\nЗдесь тебя ждут письма, подарки и сюрпризы ✨`,
-            {
-                reply_markup: {
-                    inline_keyboard: [[
-                        { text: '💕 Открыть приложение', web_app: { url: WEBAPP_URL } }
-                    ]]
-                }
-            }
-        );
-    });
-
-    bot.onText(/\/menu/, (msg) => {
-        botChatIds.add(msg.chat.id);
-        bot.sendMessage(msg.chat.id, '📱 Главное меню:', {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '💕 Открыть', web_app: { url: WEBAPP_URL } }],
-                    [
-                        { text: '💌 Письма', web_app: { url: WEBAPP_URL + '#letters' } },
-                        { text: '🎁 Подарки', web_app: { url: WEBAPP_URL + '#gifts' } }
-                    ],
-                    [
-                        { text: '📅 Календарь', web_app: { url: WEBAPP_URL + '#calendar' } },
-                        { text: '👤 Профиль', web_app: { url: WEBAPP_URL + '#profile' } }
-                    ]
-                ]
-            }
-        });
-    });
-
-    bot.onText(/\/love/, (msg) => {
-        botChatIds.add(msg.chat.id);
-        const c = [
-            'Ты освещаешь мой мир ярче тысячи звёзд ⭐',
-            'Каждый день с тобой — подарок судьбы 🎁',
-            'Ты самая красивая во вселенной 💫',
-            'Я влюбляюсь в тебя сильнее каждый день 💗',
-        ];
-        bot.sendMessage(msg.chat.id, `💕 ${c[Math.floor(Math.random() * c.length)]}`);
-    });
-
-    bot.onText(/\/days/, (msg) => {
-        botChatIds.add(msg.chat.id);
-        const days = sharedStore.stats.daysTogether || Math.floor((new Date() - new Date('2023-10-22')) / 86400000);
-        bot.sendMessage(msg.chat.id, `💑 Мы вместе ${days} дней!\n💕 С ${sharedStore.profile.coupleDate || '22 октября 2023'}`);
-    });
-
-    bot.onText(/\/stats/, (msg) => {
-        botChatIds.add(msg.chat.id);
-        const s = sharedStore.stats;
-        bot.sendMessage(msg.chat.id,
-            `📊 Статистика:\n\n💑 Дней вместе: ${s.daysTogether}\n💌 Писем: ${s.lettersReceived}\n🎁 Подарков: ${s.giftsReceived}\n📅 Событий: ${s.eventsMade}\n😊 Реакций: ${s.reactionsGiven}`
-        );
-    });
-
-    bot.onText(/\/help/, (msg) => {
-        botChatIds.add(msg.chat.id);
-        bot.sendMessage(msg.chat.id,
-            `📖 Команды:\n\n/start — Запустить\n/menu — Меню\n/love — Комплимент\n/days — Дней вместе\n/stats — Статистика\n/help — Помощь`
-        );
-    });
-
-    bot.on('web_app_data', (msg) => {
-        botChatIds.add(msg.chat.id);
-        try {
-            const data = JSON.parse(msg.web_app_data.data);
-            if (data.type === 'order') {
-                bot.sendMessage(msg.chat.id, `🛒 Заказ: ${data.itemName} за ${data.price} ⭐`);
-            }
-        } catch (e) { console.error('web_app_data error:', e); }
-    });
-
-    console.log('🤖 Bot started!');
-} catch (e) {
-    console.error('Bot init error:', e);
-}
+// ========== BOT (с защитой от ошибок) ==========
+let bot = null;
+let botChatIds = new Set();
 
 function sendBotNotification(message) {
     if (!bot) return;
     botChatIds.forEach(chatId => {
-        bot.sendMessage(chatId, message).catch(() => {});
+        bot.sendMessage(chatId, message).catch(err => {
+            console.log(`Failed to send to ${chatId}:`, err.message);
+        });
     });
+}
+
+// Инициализация бота только если токен указан
+if (BOT_TOKEN && BOT_TOKEN !== 'YOUR_TOKEN' && BOT_TOKEN.length > 20) {
+    try {
+        bot = new TelegramBot(BOT_TOKEN, { 
+            polling: {
+                interval: 1000,
+                autoStart: true,
+                params: { timeout: 10 }
+            }
+        });
+        
+        // Обработка ошибок polling
+        bot.on('polling_error', (err) => {
+            if (err.code === 'ETELEGRAM' && err.message.includes('409')) {
+                console.log('⚠️ Bot conflict: another instance running. Stopping polling...');
+                bot.stopPolling();
+            } else if (err.code === 'ETELEGRAM' && err.message.includes('404')) {
+                console.log('❌ Invalid bot token! Please check BOT_TOKEN environment variable.');
+                bot.stopPolling();
+                bot = null;
+            } else {
+                console.log('Bot polling error:', err.code, err.message);
+            }
+        });
+
+        bot.on('error', (err) => {
+            console.log('Bot error:', err.message);
+        });
+
+        bot.onText(/\/start/, (msg) => {
+            const chatId = msg.chat.id;
+            botChatIds.add(chatId);
+            const name = msg.from.first_name || 'Любимая';
+
+            bot.sendMessage(chatId,
+                `💕 Привет, ${name}!\n\nДобро пожаловать в Love App!\nЗдесь тебя ждут письма, подарки и сюрпризы ✨`,
+                {
+                    reply_markup: {
+                        inline_keyboard: [[
+                            { text: '💕 Открыть приложение', web_app: { url: WEBAPP_URL } }
+                        ]]
+                    }
+                }
+            ).catch(console.error);
+        });
+
+        bot.onText(/\/menu/, (msg) => {
+            botChatIds.add(msg.chat.id);
+            bot.sendMessage(msg.chat.id, '📱 Главное меню:', {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '💕 Открыть', web_app: { url: WEBAPP_URL } }],
+                        [
+                            { text: '💌 Письма', web_app: { url: WEBAPP_URL + '#letters' } },
+                            { text: '🎁 Подарки', web_app: { url: WEBAPP_URL + '#gifts' } }
+                        ],
+                        [
+                            { text: '📅 Календарь', web_app: { url: WEBAPP_URL + '#calendar' } },
+                            { text: '👤 Профиль', web_app: { url: WEBAPP_URL + '#profile' } }
+                        ]
+                    ]
+                }
+            }).catch(console.error);
+        });
+
+        bot.onText(/\/love/, (msg) => {
+            botChatIds.add(msg.chat.id);
+            const compliments = [
+                'Ты освещаешь мой мир ярче тысячи звёзд ⭐',
+                'Каждый день с тобой — подарок судьбы 🎁',
+                'Ты самая красивая во вселенной 💫',
+                'Я влюбляюсь в тебя сильнее каждый день 💗',
+                'Ты делаешь мою жизнь волшебной ✨',
+                'Рядом с тобой я самый счастливый 🥰'
+            ];
+            const text = compliments[Math.floor(Math.random() * compliments.length)];
+            bot.sendMessage(msg.chat.id, `💕 ${text}`).catch(console.error);
+        });
+
+        bot.onText(/\/days/, (msg) => {
+            botChatIds.add(msg.chat.id);
+            const days = sharedStore.stats.daysTogether || 0;
+            bot.sendMessage(msg.chat.id, 
+                `💑 Мы вместе ${days} дней!\n💕 С ${sharedStore.profile.coupleDate || '22 октября 2023'}`
+            ).catch(console.error);
+        });
+
+        bot.onText(/\/stats/, (msg) => {
+            botChatIds.add(msg.chat.id);
+            const s = sharedStore.stats;
+            bot.sendMessage(msg.chat.id,
+                `📊 Статистика Love App:\n\n` +
+                `💑 Дней вместе: ${s.daysTogether}\n` +
+                `💌 Писем: ${s.lettersReceived}\n` +
+                `🎁 Подарков: ${s.giftsReceived}\n` +
+                `📅 Событий: ${s.eventsMade}\n` +
+                `😊 Реакций: ${s.reactionsGiven}`
+            ).catch(console.error);
+        });
+
+        bot.onText(/\/help/, (msg) => {
+            botChatIds.add(msg.chat.id);
+            bot.sendMessage(msg.chat.id,
+                `📖 Команды:\n\n` +
+                `/start — Запустить бота\n` +
+                `/menu — Главное меню\n` +
+                `/love — Получить комплимент\n` +
+                `/days — Дней вместе\n` +
+                `/stats — Статистика\n` +
+                `/help — Справка`
+            ).catch(console.error);
+        });
+
+        console.log('🤖 Bot initialized successfully!');
+        
+    } catch (e) {
+        console.error('❌ Bot initialization failed:', e.message);
+        bot = null;
+    }
+} else {
+    console.log('⚠️ BOT_TOKEN not configured. Bot features disabled.');
+    console.log('   Set BOT_TOKEN environment variable to enable the bot.');
 }
