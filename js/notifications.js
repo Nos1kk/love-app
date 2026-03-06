@@ -1,4 +1,4 @@
-// js/notifications.js — Система уведомлений в реальном времени
+// js/notifications.js — Уведомления (только admin/user, не guest)
 
 class NotificationManager {
     constructor(storage) {
@@ -8,19 +8,24 @@ class NotificationManager {
     }
 
     init() {
+        // Гости не получают уведомлений
+        if (window.app?.isGuest) return;
+        
         this.startPolling();
         this.requestPermission();
     }
 
-    // Запрос разрешения на push-уведомления (для будущего TG бота)
     requestPermission() {
+        if (window.app?.isGuest) return;
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
         }
     }
 
-    // Проверка новых уведомлений каждые 3 секунды
     startPolling() {
+        // Гости не получают уведомлений
+        if (window.app?.isGuest) return;
+        
         this.checkInterval = setInterval(() => {
             this.checkNewNotifications();
         }, 3000);
@@ -29,28 +34,31 @@ class NotificationManager {
     stopPolling() {
         if (this.checkInterval) {
             clearInterval(this.checkInterval);
+            this.checkInterval = null;
         }
     }
 
     checkNewNotifications() {
+        // Гости не получают уведомлений
+        if (window.app?.isGuest) return;
+
         const notifications = this.storage.getNotifications();
         const newNotifs = notifications.filter(n =>
-        !n.read && new Date(n.date).getTime() > this.lastCheck
-    );
+            !n.read && new Date(n.date).getTime() > this.lastCheck
+        );
 
-    if (newNotifs.length > 0) {
-        // Показать только самое новое
-        this.showInAppNotification(newNotifs[0]);
-        this.lastCheck = Date.now();
+        if (newNotifs.length > 0) {
+            this.showInAppNotification(newNotifs[0]);
+            this.lastCheck = Date.now();
+        }
+
+        this.updateNotificationBadge();
     }
 
-    this.updateNotificationBadge();
-
-    }
-
-    // Красивое всплывающее уведомление внутри приложения
     showInAppNotification(notification) {
-        // Удалить предыдущее если есть
+        // Гости не получают уведомлений
+        if (window.app?.isGuest) return;
+
         document.getElementById('inAppNotif')?.remove();
 
         const typeIcons = {
@@ -60,7 +68,8 @@ class NotificationManager {
             order: '🛒',
             stars: '⭐',
             event: '📅',
-            system: '🔔'
+            system: '🔔',
+            wishlist: '🎁'
         };
 
         const html = `
@@ -83,7 +92,6 @@ class NotificationManager {
 
         document.body.insertAdjacentHTML('beforeend', html);
 
-        // Автоматическое скрытие через 5 секунд
         setTimeout(() => {
             const el = document.getElementById('inAppNotif');
             if (el) {
@@ -93,8 +101,9 @@ class NotificationManager {
         }, 5000);
     }
 
-    // Браузерное push-уведомление
     showBrowserNotification(notification) {
+        if (window.app?.isGuest) return;
+        
         if ('Notification' in window && Notification.permission === 'granted') {
             const profile = this.storage.getProfile();
             if (!profile.notifications) return;
@@ -107,9 +116,8 @@ class NotificationManager {
         }
     }
 
-    // Обновить бейдж уведомлений
     updateNotificationBadge() {
-        const count = this.storage.getUnreadNotificationsCount();
+        const count = window.app?.isGuest ? 0 : this.storage.getUnreadNotificationsCount();
         
         const badge = document.getElementById('notifBadge');
         if (badge) {
@@ -118,8 +126,30 @@ class NotificationManager {
         }
     }
 
-    // Открыть центр уведомлений
     openNotificationCenter() {
+        // Гости видят пустой центр
+        if (window.app?.isGuest) {
+            const html = `
+                <div class="notif-center-overlay active" id="notifCenterOverlay">
+                    <div class="notif-center">
+                        <div class="notif-center-header">
+                            <button class="notif-center-close" 
+                                    onclick="document.getElementById('notifCenterOverlay').remove()">✕</button>
+                            <h2>🔔 Уведомления</h2>
+                        </div>
+                        <div class="notif-center-content">
+                            <div class="notif-empty">
+                                <span>👀</span>
+                                <p>Гостям уведомления недоступны</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', html);
+            return;
+        }
+
         const notifications = this.storage.getNotifications();
         
         const html = `
@@ -127,9 +157,7 @@ class NotificationManager {
                 <div class="notif-center">
                     <div class="notif-center-header">
                         <button class="notif-center-close" 
-                                onclick="document.getElementById('notifCenterOverlay').remove()">
-                            ✕
-                        </button>
+                                onclick="document.getElementById('notifCenterOverlay').remove()">✕</button>
                         <h2>🔔 Уведомления</h2>
                         ${notifications.some(n => !n.read) ? `
                             <button class="notif-mark-all" 
@@ -166,7 +194,8 @@ class NotificationManager {
             order: '🛒',
             stars: '⭐',
             event: '📅',
-            system: '🔔'
+            system: '🔔',
+            wishlist: '🎁'
         };
 
         return `
@@ -186,6 +215,8 @@ class NotificationManager {
     }
 
     openNotification(notifId) {
+        if (window.app?.isGuest) return;
+
         this.storage.markNotificationRead(notifId);
         
         const notif = this.storage.getNotifications().find(n => n.id === notifId);
@@ -193,14 +224,8 @@ class NotificationManager {
 
         document.getElementById('notifCenterOverlay')?.remove();
 
-        // Навигация в зависимости от типа
         switch (notif.type) {
             case 'letter':
-                window.app?.navigateTo('letters');
-                if (notif.letterId) {
-                    setTimeout(() => window.app?.letters?.openLetter(notif.letterId), 300);
-                }
-                break;
             case 'reply':
                 window.app?.navigateTo('letters');
                 if (notif.letterId) {
@@ -208,13 +233,17 @@ class NotificationManager {
                 }
                 break;
             case 'gift':
+            case 'stars':
                 window.app?.navigateTo('gifts');
                 break;
             case 'order':
                 window.app?.navigateTo('admin');
                 break;
-            case 'stars':
-                window.app?.navigateTo('gifts');
+            case 'wishlist':
+                window.app?.navigateTo('wishlist');
+                break;
+            case 'event':
+                window.app?.navigateTo('calendar');
                 break;
             default:
                 window.app?.navigateTo('home');
@@ -224,6 +253,8 @@ class NotificationManager {
     }
 
     markAllRead() {
+        if (window.app?.isGuest) return;
+
         this.storage.markAllNotificationsRead();
         
         document.querySelectorAll('.notif-item').forEach(item => {
@@ -236,7 +267,7 @@ class NotificationManager {
         if (markBtn) markBtn.remove();
         
         this.updateNotificationBadge();
-        window.app?.toast?.show('Все прочитано! ✓');
+        window.app?.showToast('Все прочитано! ✓');
     }
 
     getTimeAgo(date) {

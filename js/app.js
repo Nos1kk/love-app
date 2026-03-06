@@ -1,8 +1,11 @@
-// js/app.js — v4.0
+// js/app.js — v5.0 (фиксы, вишлист, games, викторина)
 
 class LoveApp {
     constructor() {
         this.isAdmin = false;
+        this.isUser = false;
+        this.isGuest = true;
+        this.role = 'guest';
         this.currentPage = 'home';
         this.fabOpen = false;
         this.storage = null;
@@ -17,6 +20,7 @@ class LoveApp {
         this.notifications = null;
         this.features = null;
         this.telegram = null;
+        this.wishlistManager = null;
 
         this.compliments = [
             'Ты освещаешь мой мир ярче тысячи звёзд ⭐',
@@ -32,26 +36,37 @@ class LoveApp {
     }
 
     // ========== ЗАГРУЗКА ==========
+    updateLoader(percent, text) {
+        const fill = document.getElementById('loaderFill');
+        const txt = document.getElementById('loaderText');
+        if (fill) fill.style.width = percent + '%';
+        if (txt) txt.textContent = text || '';
+    }
+
     async init() {
         try {
             this.updateLoader(10, 'Инициализация...');
 
             this.storage = new DataStorage();
-            const profile = this.storage.getProfile();
-            this.isAdmin = profile.isAdmin || false;
 
             this.updateLoader(20, 'Telegram...');
 
+            this.tgUserId = 0;
             if (typeof TelegramIntegration !== 'undefined') {
                 this.telegram = new TelegramIntegration();
                 const tgReady = this.telegram.init();
                 if (tgReady) {
+                    this.tgUserId = this.telegram.getUserId() || 0;
                     const tgName = this.telegram.getUserName();
+                    const profile = this.storage.getProfile();
                     if (tgName && !profile.nameSetManually) {
                         this.storage.updateProfile({ userName: tgName });
                     }
                 }
             }
+
+            this.updateLoader(30, 'Определяем роль...');
+            await this.detectRole();
 
             this.updateLoader(40, 'Компоненты...');
 
@@ -74,6 +89,10 @@ class LoveApp {
                 this.features = new ExtraFeatures(this.storage);
             }
 
+            if (typeof WishlistManager !== 'undefined') {
+                this.wishlistManager = new WishlistManager(this.storage);
+            }
+
             this.updateLoader(75, 'Интерфейс...');
 
             this.nav = new Navigation(this);
@@ -81,14 +100,17 @@ class LoveApp {
 
             if (this.profile?.loadSavedTheme) this.profile.loadSavedTheme();
 
+            const customC = this.storage.get('customCompliments') || [];
+            if (customC.length > 0) this.compliments.push(...customC);
+
             this.setupUI();
             this.startCountdown();
             this.updateUpcomingEvents();
             this.newCompliment();
             this.updateAdminVisibility();
-            this.addHomeExtraCards();
             this.setupParallax();
             this.fixTelegramInputs();
+            this.applyRoleRestrictions();
 
             this.updateLoader(90, 'Почти готово...');
 
@@ -100,25 +122,81 @@ class LoveApp {
             setTimeout(() => this.animateLoveMeter(), 1200);
 
             this.handleHashNavigation();
-            console.log('Love App v4.0!');
+            console.log(`Love App v5.0 | Role: ${this.role}`);
         } catch (error) {
             console.error('Init error:', error);
             this.hideSplash();
         }
     }
 
-    updateLoader(percent, text) {
-        const fill = document.getElementById('loaderFill');
-        const label = document.getElementById('loaderText');
-        if (fill) fill.style.width = percent + '%';
-        if (label) label.textContent = text;
+    // ========== HASH NAVIGATION ==========
+    handleHashNavigation() {
+        const hash = window.location.hash.replace('#', '');
+        if (hash && document.getElementById('page-' + hash)) {
+            setTimeout(() => this.navigateTo(hash), 300);
+        }
+        window.addEventListener('hashchange', () => {
+            const h = window.location.hash.replace('#', '');
+            if (h && document.getElementById('page-' + h)) {
+                this.navigateTo(h);
+            }
+        });
     }
 
     hideSplash() {
         const splash = document.getElementById('splashScreen');
         if (splash) {
-            splash.classList.add('hiding');
-            setTimeout(() => { splash.classList.add('hidden'); }, 800);
+            splash.style.opacity = '0';
+            splash.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => splash.style.display = 'none', 500);
+        }
+    }
+
+    // ========== ROLE ==========
+    async detectRole() {
+        try {
+            const resp = await fetch(`/api/role?tgId=${this.tgUserId}`);
+            if (resp.ok) {
+                const data = await resp.json();
+                this.role = data.role;
+            } else {
+                this.role = 'guest';
+            }
+        } catch (e) {
+            const profile = this.storage.getProfile();
+            this.role = profile.isAdmin ? 'admin' : (profile.role || 'guest');
+        }
+
+        this.isAdmin = (this.role === 'admin');
+        this.isUser = (this.role === 'user');
+        this.isGuest = (this.role === 'guest');
+
+        this.storage.updateProfile({ role: this.role, isAdmin: this.isAdmin });
+    }
+
+    applyRoleRestrictions() {
+        if (this.isGuest) {
+            document.getElementById('headerUserName').textContent = 'Гость 👀';
+            document.getElementById('menuUserName').textContent = 'Гость 👀';
+            document.getElementById('menuUserStatus').textContent = 'Режим просмотра';
+            document.getElementById('menuRoleBadge').textContent = 'Гость';
+
+            // Скрыть кнопки редактирования
+            document.querySelectorAll('.page-header-action').forEach(el => el.style.display = 'none');
+
+            // Скрыть FAB
+            const fab = document.getElementById('fabCenter');
+            if (fab) fab.style.display = 'none';
+            
+            // Скрыть кнопку добавления вишлиста
+            const wishBtn = document.getElementById('wishlistAddBtn');
+            if (wishBtn) wishBtn.style.display = 'none';
+        }
+
+        // Скрыть переключатель ролей для гостя
+        const roleSwitcher = document.getElementById('roleSwitcher');
+        if (roleSwitcher) {
+            roleSwitcher.style.display = this.isGuest ? 'none' : 'block';
         }
     }
 
@@ -140,7 +218,7 @@ class LoveApp {
         }, { passive: true });
     }
 
-    // ========== FAB MENU (#10) ==========
+    // ========== FAB ==========
     toggleFab() {
         this.fabOpen = !this.fabOpen;
         const btn = document.getElementById('fabBtn');
@@ -149,10 +227,7 @@ class LoveApp {
 
         btn?.classList.toggle('open', this.fabOpen);
         backdrop?.classList.toggle('show', this.fabOpen);
-
-        items.forEach(item => {
-            item.classList.toggle('show', this.fabOpen);
-        });
+        items.forEach(item => item.classList.toggle('show', this.fabOpen));
 
         if (this.fabOpen && this.effects) {
             this.effects.launchHeartBurst(window.innerWidth / 2, window.innerHeight - 60);
@@ -173,28 +248,20 @@ class LoveApp {
     }
 
     fixTelegramInputs() {
-        // --- FIX 1: Скрываем нижнюю навигацию при открытии клавиатуры ---
         const handleFocusIn = (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
                 document.body.classList.add('keyboard-open');
-                // Прокручиваем к полю ввода с задержкой (ждём анимацию клавиатуры)
                 setTimeout(() => {
                     e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }, 300);
             }
         };
-
         const handleFocusOut = () => {
-            // Убираем класс с небольшой задержкой (клавиатура закрывается не мгновенно)
-            setTimeout(() => {
-                document.body.classList.remove('keyboard-open');
-            }, 150);
+            setTimeout(() => document.body.classList.remove('keyboard-open'), 150);
         };
-
         document.addEventListener('focusin', handleFocusIn);
         document.addEventListener('focusout', handleFocusOut);
 
-        // --- FIX 2: Перехватываем клавиши в полях ввода (Telegram перехватывает) ---
         document.addEventListener('keydown', e => {
             const a = document.activeElement;
             if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) {
@@ -202,33 +269,21 @@ class LoveApp {
             }
         }, true);
 
-        // --- FIX 3: Обработка visualViewport (определяем клавиатуру точнее) ---
         if (window.visualViewport) {
             let initialHeight = window.visualViewport.height;
-
             window.visualViewport.addEventListener('resize', () => {
-                // Если высота уменьшилась больше чем на 25% — клавиатура открыта
                 const isKeyboard = window.visualViewport.height < initialHeight * 0.75;
                 document.body.classList.toggle('keyboard-open', isKeyboard);
             });
-
-            // Обновляем начальную высоту при изменении ориентации
-            window.visualViewport.addEventListener('scroll', () => {
-                // Предотвращаем прыжки при скролле с открытой клавиатурой
-            });
         }
 
-        // --- FIX 4: Предотвращаем двойной тап зум на iOS ---
         let lastTouchEnd = 0;
         document.addEventListener('touchend', (e) => {
             const now = Date.now();
-            if (now - lastTouchEnd <= 300) {
-                e.preventDefault();
-            }
+            if (now - lastTouchEnd <= 300) e.preventDefault();
             lastTouchEnd = now;
         }, { passive: false });
 
-        // --- FIX 5: Клик-фокус для Telegram WebApp (некоторые версии не дают фокус) ---
         document.addEventListener('click', e => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
                 setTimeout(() => e.target.focus(), 50);
@@ -252,7 +307,7 @@ class LoveApp {
             page.style.opacity = '1';
             page.style.transform = 'none';
             this.currentPage = pageId;
-            this.nav.setActivePage(pageId);
+            this.nav?.setActivePage(pageId);
             this.renderPageContent(pageId);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -262,18 +317,26 @@ class LoveApp {
         }
 
         if (this.nav?.menuOpen) this.nav.toggleMenu();
+
+        // Hash
+        if (pageId !== 'home') {
+            history.replaceState(null, '', '#' + pageId);
+        } else {
+            history.replaceState(null, '', window.location.pathname);
+        }
     }
 
     renderPageContent(pageId) {
         const map = {
             home: () => { this.updateUpcomingEvents(); this.animateLoveMeter(); },
-            calendar: () => { this.calendar.renderCalendar(); this.showIf('calAddBtn'); },
+            calendar: () => { this.calendar?.renderCalendar(); this.showIf('calAddBtn'); },
             letters: () => { this.renderLettersContent(); this.showIf('letterAddBtn'); },
             profile: () => this.renderProfileContent(),
             gallery: () => { this.renderGalleryContent(); this.showIf('galleryAddBtn'); },
             gifts: () => { this.renderGiftsContent(); this.showIf('giftAddBtn'); },
-            admin: () => this.admin.renderFullAdmin(),
+            admin: () => this.admin?.renderFullAdmin(),
             games: () => this.renderGamesContent(),
+            wishlist: () => this.wishlistManager?.renderWishlistPage(),
         };
         (map[pageId] || (() => {}))();
     }
@@ -283,7 +346,7 @@ class LoveApp {
         if (el) el.style.display = this.isAdmin ? 'flex' : 'none';
     }
 
-    // ========== GAMES PAGE (#10) ==========
+    // ========== GAMES PAGE ==========
     renderGamesContent() {
         const container = document.getElementById('gamesContent');
         if (!container) return;
@@ -295,49 +358,44 @@ class LoveApp {
                     <div class="game-card-title">Колесо удачи</div>
                     <div class="game-card-desc">Крути каждый день!</div>
                 </div>
+                <div class="game-card" onclick="app.features.openQuiz()">
+                    <span class="game-card-emoji">🧠</span>
+                    <div class="game-card-title">Викторина</div>
+                    <div class="game-card-desc">Проверь знания!</div>
+                </div>
                 <div class="game-card" onclick="app.features.openGoals()">
                     <span class="game-card-emoji">🎯</span>
                     <div class="game-card-title">Наши цели</div>
                     <div class="game-card-desc">Совместные мечты</div>
-                </div>
-                <div class="game-card" onclick="app.features.openAnalytics()">
-                    <span class="game-card-emoji">📊</span>
-                    <div class="game-card-title">Аналитика</div>
-                    <div class="game-card-desc">Статистика любви</div>
                 </div>
                 <div class="game-card" onclick="app.features.openPlaylist()">
                     <span class="game-card-emoji">🎵</span>
                     <div class="game-card-title">Плейлист</div>
                     <div class="game-card-desc">Наши песни</div>
                 </div>
+                <div class="game-card" onclick="app.features.openAnalytics()">
+                    <span class="game-card-emoji">📊</span>
+                    <div class="game-card-title">Аналитика</div>
+                    <div class="game-card-desc">Статистика любви</div>
+                </div>
                 <div class="game-card" onclick="app.features.openQuickNotes()">
                     <span class="game-card-emoji">📌</span>
                     <div class="game-card-title">Записки</div>
                     <div class="game-card-desc">Быстрые заметки</div>
                 </div>
-                <div class="game-card" onclick="app.openLoveQuiz()">
-                    <span class="game-card-emoji">💕</span>
-                    <div class="game-card-title">Викторина</div>
-                    <div class="game-card-desc">Проверь знания!</div>
-                </div>
             </div>
         `;
     }
 
-    openLoveQuiz() {
-        const questions = [
-            { q: 'Какой наш любимый фильм?', a: ['Ещё не решили! 🎬'] },
-            { q: 'Где было первое свидание?', a: ['В нашем месте! 💕'] },
-            { q: 'Что я люблю больше всего?', a: ['Тебя! ❤️'] },
-        ];
-        const q = questions[Math.floor(Math.random() * questions.length)];
-        this.openModal('💕', q.q, q.a[0]);
+    // ========== WISHLIST (модальный - старый, оставляем для совместимости) ==========
+    openWishlist() {
+        this.navigateTo('wishlist');
     }
 
     // ========== UI SETUP ==========
     setupUI() {
         this.updateHeaderUI();
-        this.nav.updateBadges();
+        this.nav?.updateBadges();
         if (this.notifications) this.notifications.updateNotificationBadge();
     }
 
@@ -352,7 +410,7 @@ class LoveApp {
             headerUserName: `Привет, ${name}!`,
             menuUserName: `${name} ${this.isAdmin ? '👑' : '💕'}`,
             menuUserStatus: this.isAdmin ? 'Администратор' : (profile.userStatus || 'В сети'),
-            menuRoleBadge: this.isAdmin ? 'Админ 👑' : 'Принцесса',
+            menuRoleBadge: this.isAdmin ? 'Админ 👑' : (this.isUser ? 'Принцесса' : 'Гость'),
             roleSwitchLabel: this.isAdmin ? '👸 Режим Принцессы' : '🔑 Войти как Админ'
         };
         Object.entries(sets).forEach(([id, val]) => {
@@ -370,10 +428,6 @@ class LoveApp {
             const el = document.getElementById(id);
             if (el) el.style.display = this.isAdmin ? 'flex' : 'none';
         });
-    }
-
-    addHomeExtraCards() {
-        // Already in cards-slider from HTML
     }
 
     // ========== COUNTDOWN ==========
@@ -510,9 +564,9 @@ class LoveApp {
             : letters.map(l => this.letters.renderLetterItem(l)).join('');
     }
 
-    closeLetterDetail() { this.letters.closeLetter(); }
-    reactToLetter(e) { if (this.letters.currentLetter) this.letters.addReaction(this.letters.currentLetter.id, e); }
-    sendReply() { if (this.letters.currentLetter) this.letters.sendReply(this.letters.currentLetter.id); }
+    closeLetterDetail() { this.letters?.closeLetter(); }
+    reactToLetter(e) { if (this.letters?.currentLetter) this.letters.addReaction(this.letters.currentLetter.id, e); }
+    sendReply() { if (this.letters?.currentLetter) this.letters.sendReply(this.letters.currentLetter.id); }
 
     renderProfileContent() {
         const c = document.getElementById('page-profile');
@@ -536,8 +590,8 @@ class LoveApp {
         this.showConfirmModal('Удалить событие?', () => {
             this.storage.deleteEvent(eventId);
             this.showToast('Событие удалено 🗑️');
-            if (this.currentPage === 'admin') this.admin.renderFullAdmin();
-            if (this.currentPage === 'calendar') this.calendar.renderCalendar();
+            if (this.currentPage === 'admin') this.admin?.renderFullAdmin();
+            if (this.currentPage === 'calendar') this.calendar?.renderCalendar();
             this.updateUpcomingEvents();
         });
     }
@@ -546,12 +600,11 @@ class LoveApp {
         this.showConfirmModal('Удалить письмо?', () => {
             this.storage.deleteLetter(letterId);
             this.showToast('Письмо удалено 🗑️');
-            if (this.currentPage === 'admin') this.admin.renderFullAdmin();
+            if (this.currentPage === 'admin') this.admin?.renderFullAdmin();
             if (this.currentPage === 'letters') this.renderLettersContent();
             this.nav?.updateBadges();
         });
     }
-
 
     renderGiftsContent() {
         const profile = this.storage.getProfile();
@@ -611,20 +664,31 @@ class LoveApp {
     }
 
     switchRole() {
+        if (this.isGuest) {
+            this.showToast('Гостям нельзя менять роль 🔒');
+            return;
+        }
+
         if (!this.isAdmin) {
             this.showPasswordModal(pw => {
                 if (pw === '1234' || pw === 'love') {
                     this.isAdmin = true;
-                    this.storage.updateProfile({ isAdmin: true });
+                    this.isUser = false;
+                    this.role = 'admin';
+                    this.storage.updateProfile({ isAdmin: true, role: 'admin' });
                     this.reinitModules();
                     this.showToast('Админ режим! 👑');
-                } else if (pw) this.showToast('Неверный пароль! 🔒');
+                } else if (pw) {
+                    this.showToast('Неверный пароль! 🔒');
+                }
             });
         } else {
             this.isAdmin = false;
-            this.storage.updateProfile({ isAdmin: false });
+            this.isUser = true;
+            this.role = 'user';
+            this.storage.updateProfile({ isAdmin: false, role: 'user' });
             this.reinitModules();
-            this.showToast('Принцесса! 👸');
+            this.showToast('Режим пользователя! 👸');
         }
     }
 
@@ -636,6 +700,7 @@ class LoveApp {
         this.profile = new ProfileManager(this.storage, this.isAdmin);
         this.updateHeaderUI();
         this.updateAdminVisibility();
+        this.applyRoleRestrictions();
         this.navigateTo('home');
     }
 
@@ -666,14 +731,14 @@ class LoveApp {
     }
 
     // Shortcuts
-    changeMonth(d) { this.calendar.changeMonth(d); }
+    changeMonth(d) { this.calendar?.changeMonth(d); }
     switchCalTab(t, el) {
         document.querySelectorAll('.cal-tab').forEach(t => t.classList.remove('active'));
         el?.classList.add('active');
         document.querySelectorAll('.cal-view').forEach(v => v.classList.remove('active'));
         document.getElementById('calView-' + t)?.classList.add('active');
-        if (t === 'events') this.calendar.renderEventsList();
-        if (t === 'special') this.calendar.renderSpecialDates();
+        if (t === 'events') this.calendar?.renderEventsList();
+        if (t === 'special') this.calendar?.renderSpecialDates();
     }
     closeDayDetails() { const d = document.getElementById('dayDetails'); if (d) d.style.display = 'none'; }
     switchLetterTab(t, el) {
@@ -697,7 +762,7 @@ class LoveApp {
         return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
     }
 
-    launchConfetti() { this.effects.launchConfetti(); }
+    launchConfetti() { this.effects?.launchConfetti(); }
 }
 
 // Globals

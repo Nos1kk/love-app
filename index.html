@@ -79,6 +79,14 @@
             <div class="menu-item-icon pink">📸</div>
             <span class="menu-item-text">Фотоальбомы</span>
         </div>
+        <div class="menu-item" data-page="wishlist" onclick="navigateTo('wishlist')">
+            <div class="menu-item-icon coral">🎁</div>
+            <span class="menu-item-text">Вишлист</span>
+        </div>
+        <div class="menu-item" data-page="games" onclick="navigateTo('games')">
+            <div class="menu-item-icon mint">🎮</div>
+            <span class="menu-item-text">Игры</span>
+        </div>
         <div class="menu-item" data-page="profile" onclick="navigateTo('profile')">
             <div class="menu-item-icon coral">👤</div>
             <span class="menu-item-text">Профиль</span>
@@ -93,7 +101,7 @@
     </div>
     <div class="menu-footer">
         <p>Сделано с 💕</p>
-        <div class="role-switcher" onclick="switchRole()">
+        <div class="role-switcher" id="roleSwitcher" onclick="switchRole()">
             <span id="roleSwitchLabel">🔑 Войти как Админ</span>
         </div>
     </div>
@@ -303,13 +311,14 @@
         <div class="gifts-list" id="giftsSent" style="display:none;"></div>
     </div>
 
-    <!-- PAGE: ADMIN -->
-    <div class="page" id="page-admin">
-        <div class="page-header admin-header-bg">
+    <!-- PAGE: WISHLIST -->
+    <div class="page" id="page-wishlist">
+        <div class="page-header">
             <button class="back-btn" onclick="navigateTo('home')">‹</button>
-            <h1 class="page-title">⚙️ Админ-панель</h1>
+            <h1 class="page-title">🎁 Вишлист</h1>
+            <div class="page-header-action" id="wishlistAddBtn" onclick="app.wishlistManager?.openAddForm()">+</div>
         </div>
-        <div class="admin-content" id="adminContent"></div>
+        <div class="wishlist-content" id="wishlistContent"></div>
     </div>
 
     <!-- PAGE: GAMES -->
@@ -319,6 +328,15 @@
             <h1 class="page-title">🎮 Игры</h1>
         </div>
         <div class="games-content" id="gamesContent"></div>
+    </div>
+
+    <!-- PAGE: ADMIN -->
+    <div class="page" id="page-admin">
+        <div class="page-header admin-header-bg">
+            <button class="back-btn" onclick="navigateTo('home')">‹</button>
+            <h1 class="page-title">⚙️ Админ-панель</h1>
+        </div>
+        <div class="admin-content" id="adminContent"></div>
     </div>
 
 </div>
@@ -335,19 +353,19 @@
     <!-- FAB Heart Center -->
     <div class="nav-center" id="fabCenter">
         <div class="fab-menu" id="fabMenu">
-            <div class="fab-item" data-pos="1" onclick="app.gifts.openGiftShop(); app.closeFab();">
-                <span class="fab-item-icon">⭐</span>
-                <span class="fab-item-label">Магазин</span>
+            <div class="fab-item" data-pos="1" onclick="navigateTo('wishlist'); app.closeFab();">
+                <span class="fab-item-icon">🎁</span>
+                <span class="fab-item-label">Вишлист</span>
             </div>
             <div class="fab-item" data-pos="2" onclick="navigateTo('games'); app.closeFab();">
                 <span class="fab-item-icon">🎮</span>
                 <span class="fab-item-label">Игры</span>
             </div>
-            <div class="fab-item" data-pos="3" onclick="app.letters.openCompose(); app.closeFab();">
-                <span class="fab-item-icon">💌</span>
-                <span class="fab-item-label">Письмо</span>
+            <div class="fab-item" data-pos="3" onclick="app.gifts?.openGiftShop(); app.closeFab();">
+                <span class="fab-item-icon">⭐</span>
+                <span class="fab-item-label">Магазин</span>
             </div>
-            <div class="fab-item" data-pos="4" onclick="app.features.openQuickNotes(); app.closeFab();">
+            <div class="fab-item" data-pos="4" onclick="app.features?.openQuickNotes(); app.closeFab();">
                 <span class="fab-item-icon">📌</span>
                 <span class="fab-item-label">Записки</span>
             </div>
@@ -364,6 +382,7 @@
     </div>
 </nav>
 
+<!-- ===== SCRIPTS ===== -->
 <script src="js/storage.js"></script>
 <script src="js/effects.js"></script>
 <script src="js/calendar.js"></script>
@@ -375,6 +394,7 @@
 <script src="js/navigation.js"></script>
 <script src="js/notifications.js"></script>
 <script src="js/features.js"></script>
+<script src="js/wishlist.js"></script>
 <script src="js/telegram.js"></script>
 <script src="js/app.js"></script>
 </body>

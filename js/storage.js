@@ -126,11 +126,9 @@ class DataStorage {
     applyServerData(data) {
         const localProfile = this.get('profile') || {};
         const isAdmin = localProfile.isAdmin;
-        
-        // Обновляем данные из сервера, сохраняя isAdmin из локального
-        if (data.profile) {
-            this.set('profile', { ...data.profile, isAdmin });
-        }
+        const role = localProfile.role;
+
+        if (data.profile) this.set('profile', { ...data.profile, isAdmin, role });
         if (data.letters) this.set('letters', data.letters);
         if (data.events) this.set('events', data.events);
         if (data.gifts) this.set('gifts', data.gifts);
@@ -141,7 +139,13 @@ class DataStorage {
         if (data.orders) this.set('orders', data.orders);
         if (data.goals) this.set('goals', data.goals);
         if (data.quickNotes) this.set('quickNotes', data.quickNotes);
+        if (data.wishlist) this.set('wishlist', data.wishlist);
         if (data.stats) this.set('stats', data.stats);
+        if (data.wheelPrizes) this.set('wheelPrizes', data.wheelPrizes);
+        if (data.shopItems) this.set('shopItems', data.shopItems);
+        if (data.playlist) this.set('playlist', data.playlist);
+        if (data.quizQuestions) this.set('quizQuestions', data.quizQuestions);
+        if (data.customCompliments) this.set('customCompliments', data.customCompliments);
     }
 
     // Отправить данные на сервер
@@ -490,6 +494,34 @@ class DataStorage {
         }
         keys.forEach(k => localStorage.removeItem(k));
         this.serverPost('/api/reset', {});
+    }
+
+    // ========== WISHLIST ==========
+    getWishlist() { return (this.get('wishlist') || []).sort((a, b) => {
+        const p = { high: 0, medium: 1, low: 2 };
+        return (p[a.priority] || 1) - (p[b.priority] || 1);
+    }); }
+
+    addWishlistItem(item) {
+        const list = this.get('wishlist') || [];
+        list.push(item);
+        this.set('wishlist', list);
+        this.serverPost('/api/wishlist', item);
+    }
+
+    updateWishlistItem(id, updates) {
+        const list = this.get('wishlist') || [];
+        const idx = list.findIndex(w => w.id === id);
+        if (idx >= 0) {
+            Object.assign(list[idx], updates);
+            this.set('wishlist', list);
+            this.serverPut(`/api/wishlist/${id}`, updates);
+        }
+    }
+
+    deleteWishlistItem(id) {
+        this.set('wishlist', (this.get('wishlist') || []).filter(w => w.id !== id));
+        this.serverDelete(`/api/wishlist/${id}`);
     }
 }
 
